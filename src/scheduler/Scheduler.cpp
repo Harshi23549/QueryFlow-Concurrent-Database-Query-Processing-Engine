@@ -1,36 +1,32 @@
-#include "scheduler.h"
+#include "queryflow/scheduler/Scheduler.h"
 
-#include <stdexcept>
+#include <chrono>
+
+namespace queryflow {
 
 Scheduler::Scheduler(SchedulingPolicy policy)
-    : policy_(policy) {
-}
+    : policy_(policy) {}
 
 void Scheduler::setPolicy(SchedulingPolicy policy) {
     policy_ = policy;
 }
 
-int Scheduler::selectNext(
-    const std::vector<QueryTask>& queries) const {
-
+int Scheduler::selectNext(const std::vector<QueryTask>& queries) const {
     if (queries.empty()) {
         return -1;
     }
 
     int best = 0;
-
     for (int i = 1; i < static_cast<int>(queries.size()); ++i) {
         bool chooseCurrent = false;
 
         if (policy_ == SchedulingPolicy::FCFS) {
-            chooseCurrent =
-                queries[i].submittedAt < queries[best].submittedAt;
+            chooseCurrent = queries[i].submittedAt < queries[best].submittedAt;
         } else {
             if (queries[i].priority > queries[best].priority) {
                 chooseCurrent = true;
             } else if (queries[i].priority == queries[best].priority &&
-                       queries[i].submittedAt <
-                           queries[best].submittedAt) {
+                       queries[i].submittedAt < queries[best].submittedAt) {
                 chooseCurrent = true;
             }
         }
@@ -57,3 +53,5 @@ double Scheduler::responseTimeMs(const QueryTask& query) {
     return std::chrono::duration<double, std::milli>(
         query.finishedAt - query.submittedAt).count();
 }
+
+}  // namespace queryflow

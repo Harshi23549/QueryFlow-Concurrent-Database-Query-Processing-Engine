@@ -1,9 +1,10 @@
-#ifndef SCHEDULER_H
-#define SCHEDULER_H
+#pragma once
 
 #include <chrono>
 #include <string>
 #include <vector>
+
+namespace queryflow {
 
 enum class SchedulingPolicy {
     FCFS,
@@ -25,8 +26,6 @@ public:
     explicit Scheduler(SchedulingPolicy policy);
 
     void setPolicy(SchedulingPolicy policy);
-
-    // Returns the index of the next query, or -1 if empty.
     int selectNext(const std::vector<QueryTask>& queries) const;
 
     static double waitingTimeMs(const QueryTask& query);
@@ -37,4 +36,4 @@ private:
     SchedulingPolicy policy_;
 };
 
-#endif
+}  // namespace queryflow
