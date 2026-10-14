@@ -1,0 +1,11 @@
+build/
+bin/
+*.o
+*.out
+.vscode/
+.env
+*.log
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+Makefile
