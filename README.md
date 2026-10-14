@@ -36,3 +36,21 @@ The main goal of QueryFlow is to study how different workloads and levels of con
 QueryFlow aims to provide a practical way to understand the interaction between **operating systems and database systems**, rather than studying these concepts independently.
 
 The project focuses on building the query processing workflow, controlling concurrent execution, and analyzing how system performance changes under different workloads.
+
+## Current Verified Deliverables
+
+The following components are implemented and validated in the repository:
+
+- A thread-safe shared query queue using `std::mutex` and `std::condition_variable`
+- A worker thread pool that drains queued queries and executes them through a database interface
+- A scheduler with FCFS and priority-based selection logic
+- Unit coverage for scheduler timing and ordering behavior
+- Concurrency stress tests to verify exactly-once execution across multiple producers and worker counts
+
+Build and test with:
+
+```bash
+cmake -S . -B build
+cmake --build build
+ctest --test-dir build --output-on-failure
+```

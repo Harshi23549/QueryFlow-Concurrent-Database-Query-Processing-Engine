@@ -26,6 +26,7 @@ public:
     SharedQueryQueue& operator=(const SharedQueryQueue&) = delete;
 
     // Producer: enqueue a query and wake one sleeping worker.
+    // Once shutdown has been requested, no new work is accepted.
     void push(Query query);
 
     // Consumer: block until a query is available or the queue is stopped

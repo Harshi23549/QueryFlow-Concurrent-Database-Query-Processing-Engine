@@ -5,6 +5,9 @@
 void SharedQueryQueue::push(Query query) {
     {
         std::lock_guard<std::mutex> lock(mutex_);
+        if (stopping_) {
+            return;
+        }
         queue_.push(std::move(query));
     }
     // Notify outside the lock so the woken thread doesn't immediately block

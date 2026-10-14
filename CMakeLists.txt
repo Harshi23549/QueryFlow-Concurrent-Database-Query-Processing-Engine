@@ -27,3 +27,16 @@ target_include_directories(SchedulerTests PRIVATE
 )
 
 add_test(NAME SchedulerTests COMMAND SchedulerTests)
+
+add_executable(ConcurrencyTests
+    ConcurrencyTest.cpp
+    SharedQueryQueue.cpp
+    WorkerPool.cpp
+    MockDatabaseManager.cpp
+)
+
+target_include_directories(ConcurrencyTests PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}
+)
+
+add_test(NAME ConcurrencyTests COMMAND ConcurrencyTests)
