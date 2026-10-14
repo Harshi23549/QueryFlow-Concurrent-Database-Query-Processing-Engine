@@ -10,7 +10,7 @@ public:
     DatabaseManager();
     ~DatabaseManager() override = default;
 
-    void execute(const Query& query) override;
+    DatabaseResult execute(const Query& query) override;
 };
 
 }  // namespace queryflow

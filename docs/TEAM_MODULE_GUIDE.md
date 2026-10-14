@@ -29,7 +29,7 @@ This project is structured so every team member can work on a specific part with
   Runtime configuration and future tuning parameters.
 
 - `src/app`  
-  Application entry point.
+  CLI application entry point and interactive commands.
 
 - `src/*`  
   Concrete implementation files for each module.
@@ -62,13 +62,19 @@ Executes queued queries using the database abstraction.
 Keeps database execution pluggable so tests can use a mock before the MySQL implementation is connected.
 
 ### Manager
-Acts as the main orchestration layer for submissions and control flow.
+Assigns query IDs, validates submissions, tracks lifecycle state, coordinates
+the queue and worker pool, and exposes snapshots to the CLI.
 
 ### Metrics
 Tracks the performance numbers needed for analysis and reports.
 
 ### Config
 Provides a place for tuning worker count, policy selection, database settings, and deployment options.
+
+### CLI
+The current CLI is in `src/app/main.cpp`. It uses the demo database backend,
+accepts SQL text as simulated work, and reports status and timing. It does not
+currently connect to MySQL.
 
 ## 4. How to contribute
 

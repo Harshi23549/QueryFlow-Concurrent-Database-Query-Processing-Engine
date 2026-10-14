@@ -167,10 +167,15 @@ The following are implemented and validated:
 
 - thread-safe queue
 - worker thread pool
-- scheduler logic (FCFS + priority)
-- metrics calculations
+- FCFS and priority scheduling integrated with pending queue selection
+- query lifecycle tracking and waiting/execution/response metrics
+- interactive CLI for query submission and status/results
 - concurrency stress tests
 - modular CMake build
+
+The CLI currently uses a **demo database backend**. It exercises the engine
+pipeline and simulates query execution, but does **not** execute SQL against
+MySQL. The MySQL-backed `DatabaseManager` remains unimplemented.
 
 ## Build and test
 
@@ -178,7 +183,20 @@ The following are implemented and validated:
 cmake -S . -B build
 cmake --build build
 ctest --test-dir build --output-on-failure
+./build/QueryFlow --workers 4 --policy fcfs
 ```
+
+CLI commands:
+
+- Type a SQL statement to submit it at priority `0`.
+- `/submit <priority> <SQL>` submits a query with an explicit priority.
+- `/status` lists query IDs and states.
+- `/wait` waits until all submitted work finishes and prints results and
+  timing metrics.
+- `/quit` drains queued work and exits.
+
+Use `./build/QueryFlow --help` for usage. The program prints a demo-backend
+warning at startup so it is not mistaken for real database execution.
 
 ## Module ownership
 

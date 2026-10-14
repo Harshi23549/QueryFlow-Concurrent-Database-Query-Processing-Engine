@@ -1,7 +1,5 @@
 #include "queryflow/scheduler/Scheduler.h"
 
-#include <chrono>
-
 namespace queryflow {
 
 Scheduler::Scheduler(SchedulingPolicy policy)
@@ -11,7 +9,7 @@ void Scheduler::setPolicy(SchedulingPolicy policy) {
     policy_ = policy;
 }
 
-int Scheduler::selectNext(const std::vector<QueryTask>& queries) const {
+int Scheduler::selectNext(const std::vector<Query>& queries) const {
     if (queries.empty()) {
         return -1;
     }
@@ -21,12 +19,12 @@ int Scheduler::selectNext(const std::vector<QueryTask>& queries) const {
         bool chooseCurrent = false;
 
         if (policy_ == SchedulingPolicy::FCFS) {
-            chooseCurrent = queries[i].submittedAt < queries[best].submittedAt;
+            chooseCurrent = queries[i].submitTime < queries[best].submitTime;
         } else {
             if (queries[i].priority > queries[best].priority) {
                 chooseCurrent = true;
             } else if (queries[i].priority == queries[best].priority &&
-                       queries[i].submittedAt < queries[best].submittedAt) {
+                       queries[i].submitTime < queries[best].submitTime) {
                 chooseCurrent = true;
             }
         }
@@ -37,21 +35,6 @@ int Scheduler::selectNext(const std::vector<QueryTask>& queries) const {
     }
 
     return best;
-}
-
-double Scheduler::waitingTimeMs(const QueryTask& query) {
-    return std::chrono::duration<double, std::milli>(
-        query.startedAt - query.submittedAt).count();
-}
-
-double Scheduler::executionTimeMs(const QueryTask& query) {
-    return std::chrono::duration<double, std::milli>(
-        query.finishedAt - query.startedAt).count();
-}
-
-double Scheduler::responseTimeMs(const QueryTask& query) {
-    return std::chrono::duration<double, std::milli>(
-        query.finishedAt - query.submittedAt).count();
 }
 
 }  // namespace queryflow

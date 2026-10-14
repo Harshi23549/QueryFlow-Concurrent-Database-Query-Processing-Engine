@@ -3,19 +3,20 @@
 #include <condition_variable>
 #include <cstddef>
 #include <mutex>
-#include <queue>
+#include <vector>
 
 #include "queryflow/core/Query.h"
+#include "queryflow/scheduler/Scheduler.h"
 
 namespace queryflow {
 
 class SharedQueryQueue {
 public:
-    SharedQueryQueue() = default;
+    explicit SharedQueryQueue(SchedulingPolicy policy = SchedulingPolicy::FCFS);
     SharedQueryQueue(const SharedQueryQueue&) = delete;
     SharedQueryQueue& operator=(const SharedQueryQueue&) = delete;
 
-    void push(Query query);
+    bool push(Query query);
     bool waitAndPop(Query& outQuery);
     void requestStop();
     size_t size() const;
@@ -23,7 +24,8 @@ public:
 private:
     mutable std::mutex mutex_;
     std::condition_variable cv_;
-    std::queue<Query> queue_;
+    std::vector<Query> queue_;
+    Scheduler scheduler_;
     bool stopping_ = false;
 };
 

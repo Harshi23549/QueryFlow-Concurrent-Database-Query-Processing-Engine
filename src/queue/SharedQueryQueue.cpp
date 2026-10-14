@@ -4,15 +4,19 @@
 
 namespace queryflow {
 
-void SharedQueryQueue::push(Query query) {
+SharedQueryQueue::SharedQueryQueue(SchedulingPolicy policy)
+    : scheduler_(policy) {}
+
+bool SharedQueryQueue::push(Query query) {
     {
         std::lock_guard<std::mutex> lock(mutex_);
         if (stopping_) {
-            return;
+            return false;
         }
-        queue_.push(std::move(query));
+        queue_.push_back(std::move(query));
     }
     cv_.notify_one();
+    return true;
 }
 
 bool SharedQueryQueue::waitAndPop(Query& outQuery) {
@@ -23,8 +27,9 @@ bool SharedQueryQueue::waitAndPop(Query& outQuery) {
         return false;
     }
 
-    outQuery = std::move(queue_.front());
-    queue_.pop();
+    const int index = scheduler_.selectNext(queue_);
+    outQuery = std::move(queue_[static_cast<size_t>(index)]);
+    queue_.erase(queue_.begin() + index);
     return true;
 }
 

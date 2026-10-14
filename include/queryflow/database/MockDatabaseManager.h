@@ -12,7 +12,7 @@ class MockDatabaseManager : public IDatabaseManager {
 public:
     explicit MockDatabaseManager(std::chrono::milliseconds simulatedLatency = std::chrono::milliseconds(2));
 
-    void execute(const Query& query) override;
+    DatabaseResult execute(const Query& query) override;
     std::vector<int> executedIds() const;
 
 private:
