@@ -1,11 +1,14 @@
 #include <charconv>
 #include <cstddef>
 #include <iostream>
+#include <memory>
 #include <set>
 #include <sstream>
 #include <string>
 #include <system_error>
 
+#include "queryflow/database/DatabaseManager.h"
+#include "queryflow/database/IDatabaseManager.h"
 #include "queryflow/database/MockDatabaseManager.h"
 #include "queryflow/manager/QueryManager.h"
 #include "queryflow/metrics/QueryMetrics.h"
@@ -22,8 +25,7 @@ void printHelp() {
         << "  /help                    Show this help\n"
         << "  /quit                    Drain queued work and exit\n"
         << "\n"
-        << "This build uses a demo database backend. It simulates execution; it does\n"
-        << "not send SQL to MySQL or any other database.\n";
+        << "Backend selection: use --backend demo or --backend mysql.\n";
 }
 
 bool parsePriority(const std::string& text, int& priority) {
@@ -66,6 +68,18 @@ void printResults(const queryflow::QueryManager& manager,
                   << "  waiting=" << metrics.waitingTimeMs() << " ms"
                   << ", execution=" << metrics.executionTimeMs() << " ms"
                   << ", response=" << metrics.responseTimeMs() << " ms\n";
+        if (!query.columns.empty()) {
+            for (std::size_t column = 0; column < query.columns.size(); ++column) {
+                std::cout << (column == 0 ? "" : " | ") << query.columns[column];
+            }
+            std::cout << '\n';
+            for (const auto& row : query.rows) {
+                for (std::size_t column = 0; column < row.size(); ++column) {
+                    std::cout << (column == 0 ? "" : " | ") << row[column];
+                }
+                std::cout << '\n';
+            }
+        }
         reportedQueryIds.insert(query.id);
     }
 }
@@ -86,11 +100,13 @@ void submitSql(queryflow::QueryManager& manager,
 int main(int argc, char* argv[]) {
     std::size_t workerCount = 4;
     queryflow::SchedulingPolicy policy = queryflow::SchedulingPolicy::FCFS;
+    std::string backend = "demo";
 
     for (int i = 1; i < argc; ++i) {
         const std::string argument = argv[i];
         if (argument == "--help" || argument == "-h") {
-            std::cout << "Usage: QueryFlow [--workers N] [--policy fcfs|priority]\n";
+            std::cout << "Usage: QueryFlow [--workers N] [--policy fcfs|priority] "
+                         "[--backend demo|mysql]\n";
             printHelp();
             return 0;
         }
@@ -129,18 +145,57 @@ int main(int argc, char* argv[]) {
             }
             continue;
         }
+        if (argument == "--backend") {
+            if (i + 1 >= argc) {
+                std::cerr << "--backend requires demo or mysql\n";
+                return 2;
+            }
+            backend = argv[++i];
+            if (backend != "demo" && backend != "mysql") {
+                std::cerr << "Unknown backend '" << backend
+                          << "'; choose demo or mysql\n";
+                return 2;
+            }
+            continue;
+        }
         std::cerr << "Unknown option: " << argument << '\n';
         return 2;
     }
 
-    queryflow::MockDatabaseManager database;
-    queryflow::QueryManager manager(workerCount, policy, database);
+#ifndef QUERYFLOW_WITH_MYSQL
+    if (backend == "mysql") {
+        std::cerr << "This build has no MySQL Connector/C++ support. Reconfigure with "
+                     "-DQUERYFLOW_ENABLE_MYSQL=ON after installing the connector.\n";
+        return 2;
+    }
+#endif
+
+    std::unique_ptr<queryflow::IDatabaseManager> database;
+    if (backend == "mysql") {
+#ifdef QUERYFLOW_WITH_MYSQL
+        auto mysqlDatabase = std::make_unique<queryflow::DatabaseManager>();
+        try {
+            if (!mysqlDatabase->ping()) {
+                std::cerr << "MySQL connection check failed.\n";
+                return 1;
+            }
+        } catch (const std::exception& exception) {
+            std::cerr << "Could not connect to MySQL: " << exception.what() << '\n';
+            return 1;
+        }
+        database = std::move(mysqlDatabase);
+#endif
+    } else {
+        database = std::make_unique<queryflow::MockDatabaseManager>();
+    }
+
+    queryflow::QueryManager manager(workerCount, policy, *database);
     std::set<int> reportedQueryIds;
 
     std::cout << "QueryFlow CLI (workers=" << workerCount << ", policy="
               << (policy == queryflow::SchedulingPolicy::FCFS ? "FCFS" : "priority")
               << ")\n"
-              << "Backend: demo only; queries are simulated, not executed by MySQL.\n"
+              << "Backend: " << backend << '\n'
               << "Enter /help for commands or /quit to exit.\n";
 
     std::string line;

@@ -59,7 +59,9 @@ Chooses which query should run next under FCFS or priority rules.
 Executes queued queries using the database abstraction.
 
 ### Database
-Keeps database execution pluggable so tests can use a mock before the MySQL implementation is connected.
+Keeps database execution pluggable. The demo backend is used by tests; the
+merged MySQL Connector/C++ backend can be enabled with
+`QUERYFLOW_ENABLE_MYSQL=ON`.
 
 ### Manager
 Assigns query IDs, validates submissions, tracks lifecycle state, coordinates
@@ -72,9 +74,9 @@ Tracks the performance numbers needed for analysis and reports.
 Provides a place for tuning worker count, policy selection, database settings, and deployment options.
 
 ### CLI
-The current CLI is in `src/app/main.cpp`. It uses the demo database backend,
-accepts SQL text as simulated work, and reports status and timing. It does not
-currently connect to MySQL.
+The current CLI is in `src/app/main.cpp`. It accepts SQL text, reports status
+and timing, and can select either the demo backend or (when built with the
+connector) the MySQL backend using `--backend`.
 
 ## 4. How to contribute
 

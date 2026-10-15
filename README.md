@@ -157,7 +157,7 @@ Responsible for project configuration and tuning values.
 
 - **C++17**
 - **CMake**
-- **MySQL** (planned integration)
+- **MySQL Connector/C++** (optional runtime backend)
 - **Linux**
 - **Git & GitHub**
 
@@ -174,8 +174,10 @@ The following are implemented and validated:
 - modular CMake build
 
 The CLI currently uses a **demo database backend**. It exercises the engine
-pipeline and simulates query execution, but does **not** execute SQL against
-MySQL. The MySQL-backed `DatabaseManager` remains unimplemented.
+pipeline and simulates query execution. The merged MySQL Connector/C++ module
+is available as an optional backend; it must be enabled at configure time and
+requires a running MySQL server and schema setup. The MySQL-enabled build and
+live server path have not yet been verified in this environment.
 
 ## Build and test
 
@@ -186,6 +188,42 @@ ctest --test-dir build --output-on-failure
 ./build/QueryFlow --workers 4 --policy fcfs
 ```
 
+To build with MySQL Connector/C++ installed:
+
+```bash
+cmake -S . -B build-mysql -DQUERYFLOW_ENABLE_MYSQL=ON
+cmake --build build-mysql
+./build-mysql/QueryFlow --backend mysql --workers 4 --policy fcfs
+```
+
+Configure connection values through environment variables (do not put
+credentials in source files):
+
+```bash
+export QUERYFLOW_DB_HOST=127.0.0.1
+export QUERYFLOW_DB_PORT=3306
+export QUERYFLOW_DB_NAME=queryflow
+export QUERYFLOW_DB_USER=queryflow_app
+export QUERYFLOW_DB_PASSWORD='your-password'
+```
+
+Create the schema before starting QueryFlow:
+
+```bash
+mysql -u root -p < database/schema.sql
+```
+
+Create/configure a database account with permissions for the schema, then set
+the matching `QUERYFLOW_DB_USER` and `QUERYFLOW_DB_PASSWORD` values. Do not
+commit actual credentials.
+
+The MySQL backend gives each worker thread its own connector connection.
+Submitted statements are executed as raw SQL, so only submit SQL you trust.
+Use prepared statements for any future interface that accepts untrusted values.
+If the Connector/C++ library is not installed, the default build remains
+available with `--backend demo`; selecting `--backend mysql` in that build
+prints an installation/configuration error.
+
 CLI commands:
 
 - Type a SQL statement to submit it at priority `0`.
@@ -195,8 +233,8 @@ CLI commands:
   timing metrics.
 - `/quit` drains queued work and exits.
 
-Use `./build/QueryFlow --help` for usage. The program prints a demo-backend
-warning at startup so it is not mistaken for real database execution.
+Use `./build/QueryFlow --help` for usage. The selected backend is printed at
+startup.
 
 ## Module ownership
 

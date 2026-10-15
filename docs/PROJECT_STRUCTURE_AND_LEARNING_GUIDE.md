@@ -287,18 +287,16 @@ actual capabilities:
 - **Tests/build structure:** CMake builds the CLI and registers scheduler,
   concurrency, and engine lifecycle tests.
 
-### Scaffolded or not yet integrated
+### Optional / environment-dependent
 
-- **Real database manager:** `DatabaseManager::execute` is currently a
-  placeholder. There is no verified MySQL connection or SQL execution yet.
-- **MySQL execution:** The CLI explicitly uses the mock/demo backend. Use of
-  the `DatabaseManager` class fails explicitly until a MySQL connector,
-  credential/configuration handling, and integration tests are implemented.
+- **MySQL backend:** The merged Connector/C++ adapter is wired into the CLI
+  behind `QUERYFLOW_ENABLE_MYSQL`. The default build remains demo-only so it
+  can compile without connector libraries. MySQL mode still requires the
+  Connector/C++ development package, a running server, credentials, and the
+  supplied schema. This environment did not have the connector installed, so
+  the MySQL-enabled compilation and live server execution still need testing.
 - **Configuration:** The config struct is not yet loaded from a file or CLI
   options. Worker count and scheduling policy are currently CLI options.
-- **Database result sets:** The CLI reports the mock execution message. The
-  result structure can carry columns and rows, but a real SQL result set is not
-  yet available.
 
 ## 9. How to add a feature in this project
 

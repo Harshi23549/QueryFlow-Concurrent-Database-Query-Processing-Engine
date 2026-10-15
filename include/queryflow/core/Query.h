@@ -3,6 +3,7 @@
 #include <chrono>
 #include <string>
 #include <utility>
+#include <vector>
 
 namespace queryflow {
 
@@ -50,6 +51,8 @@ struct QuerySnapshot {
     std::chrono::steady_clock::time_point submitTime;
     std::chrono::steady_clock::time_point startTime;
     std::chrono::steady_clock::time_point finishTime;
+    std::vector<std::string> columns;
+    std::vector<std::vector<std::string>> rows;
     std::string result;
     std::string error;
 };

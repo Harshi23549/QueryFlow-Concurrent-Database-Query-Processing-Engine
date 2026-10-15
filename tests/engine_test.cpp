@@ -16,6 +16,16 @@ public:
     }
 };
 
+class ResultDatabaseManager : public queryflow::IDatabaseManager {
+public:
+    queryflow::DatabaseResult execute(const queryflow::Query&) override {
+        queryflow::DatabaseResult result;
+        result.columns = {"answer"};
+        result.rows = {{"42"}};
+        return result;
+    }
+};
+
 }  // namespace
 
 int main() {
@@ -70,6 +80,17 @@ int main() {
     assert(failedSnapshot.has_value());
     assert(failedSnapshot->status == queryflow::QueryStatus::Failed);
     assert(failedSnapshot->error == "synthetic database failure");
+
+    ResultDatabaseManager resultDatabase;
+    queryflow::QueryManager resultManager(
+        1, queryflow::SchedulingPolicy::FCFS, resultDatabase);
+    const auto resultQuery = resultManager.submit("SELECT 42");
+    resultManager.waitUntilIdle();
+    const auto resultSnapshot = resultManager.getQuery(resultQuery.id);
+    assert(resultSnapshot.has_value());
+    assert(resultSnapshot->columns == std::vector<std::string>{"answer"});
+    assert(resultSnapshot->rows.size() == 1);
+    assert(resultSnapshot->rows.front().front() == "42");
 
     std::cout << "Engine lifecycle tests passed!\n";
     return 0;

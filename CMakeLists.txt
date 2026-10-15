@@ -7,6 +7,8 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 find_package(Threads REQUIRED)
+option(QUERYFLOW_ENABLE_MYSQL
+    "Build with the merged MySQL Connector/C++ database module" OFF)
 enable_testing()
 
 add_library(queryflow_core
@@ -25,6 +27,38 @@ target_include_directories(queryflow_core
 )
 target_link_libraries(queryflow_core PUBLIC Threads::Threads)
 target_compile_options(queryflow_core PRIVATE -Wall -Wextra -Wpedantic)
+
+if(QUERYFLOW_ENABLE_MYSQL)
+    find_path(MYSQL_CONCPP_INCLUDE_DIR
+        NAMES mysql/jdbc.h
+        HINTS
+            ${MYSQL_CONCPP_ROOT}
+            $ENV{MYSQL_CONCPP_ROOT}
+        PATH_SUFFIXES include
+    )
+    find_library(MYSQL_CONCPP_LIBRARY
+        NAMES mysqlcppconn
+        HINTS
+            ${MYSQL_CONCPP_ROOT}
+            $ENV{MYSQL_CONCPP_ROOT}
+        PATH_SUFFIXES lib lib64 lib64/vs14
+    )
+
+    if(NOT MYSQL_CONCPP_INCLUDE_DIR OR NOT MYSQL_CONCPP_LIBRARY)
+        message(FATAL_ERROR
+            "MySQL Connector/C++ was not found. Set MYSQL_CONCPP_ROOT, "
+            "MYSQL_CONCPP_INCLUDE_DIR and MYSQL_CONCPP_LIBRARY, or configure "
+            "with -DQUERYFLOW_ENABLE_MYSQL=OFF to build the demo backend.")
+    endif()
+
+    target_sources(queryflow_core PRIVATE database/Database.cpp)
+    target_include_directories(queryflow_core PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/database
+        ${MYSQL_CONCPP_INCLUDE_DIR}
+    )
+    target_link_libraries(queryflow_core PUBLIC ${MYSQL_CONCPP_LIBRARY})
+    target_compile_definitions(queryflow_core PUBLIC QUERYFLOW_WITH_MYSQL=1)
+endif()
 
 add_executable(QueryFlow src/app/main.cpp)
 target_link_libraries(QueryFlow PRIVATE queryflow_core)

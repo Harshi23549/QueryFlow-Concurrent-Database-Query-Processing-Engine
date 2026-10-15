@@ -135,6 +135,8 @@ void QueryManager::markCompleted(
         snapshot.status = error.empty() ? QueryStatus::Completed : QueryStatus::Failed;
         snapshot.startTime = startedAt;
         snapshot.finishTime = finishedAt;
+        snapshot.columns = result.columns;
+        snapshot.rows = result.rows;
         snapshot.result = result.message;
         snapshot.error = error;
     }
