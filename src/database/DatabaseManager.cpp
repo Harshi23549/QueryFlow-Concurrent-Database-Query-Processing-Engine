@@ -52,9 +52,11 @@ DatabaseResult DatabaseManager::execute(const Query& query) {
             row.push_back(value.value_or("NULL"));
         }
     }
-    result.message = databaseResult.columns.empty()
+     result.message = databaseResult.columns.empty()
                          ? "Statement completed; affected rows: " +
-                               std::to_string(result.affectedRows)
+                               (result.affectedRows.has_value()
+                                    ? std::to_string(result.affectedRows.value())
+                                    : "N/A")
                          : "Query returned " + std::to_string(result.rows.size()) +
                                " row(s)";
     return result;
