@@ -1,11 +1,25 @@
 #include "Database.hpp"
 
+#if __has_include(<mysql/jdbc.h>)
 #include <mysql/jdbc.h>
+#else
+#include <mysql_connection.h>
+#include <mysql_driver.h>
+#include <cppconn/datatype.h>
+#include <cppconn/exception.h>
+#include <cppconn/prepared_statement.h>
+#include <cppconn/resultset.h>
+#include <cppconn/resultset_metadata.h>
+#include <cppconn/statement.h>
+#endif
 
 #include <cstdlib>
+#include <fstream>
+#include <map>
 #include <mutex>
 #include <stdexcept>
 #include <utility>
+#include <vector>
 
 namespace queryflow::db {
 namespace {
@@ -17,10 +31,51 @@ sql::Driver* connectorDriver() {
     return driver;
 }
 
+std::string trimEnv(const std::string& str) {
+    const auto first = str.find_first_not_of(" \t\r\n'\"");
+    if (first == std::string::npos) return "";
+    const auto last = str.find_last_not_of(" \t\r\n'\"");
+    return str.substr(first, last - first + 1);
+}
+
+std::map<std::string, std::string> loadDotEnv() {
+    std::map<std::string, std::string> env;
+    const std::vector<std::string> paths = {".env", "../.env", "../../.env"};
+    for (const auto& path : paths) {
+        std::ifstream file(path);
+        if (!file.is_open()) continue;
+        std::string line;
+        while (std::getline(file, line)) {
+            const auto commentPos = line.find('#');
+            if (commentPos != std::string::npos) {
+                line = line.substr(0, commentPos);
+            }
+            const auto eqPos = line.find('=');
+            if (eqPos == std::string::npos) continue;
+            const auto key = trimEnv(line.substr(0, eqPos));
+            const auto val = trimEnv(line.substr(eqPos + 1));
+            if (!key.empty()) {
+                env[key] = val;
+            }
+        }
+        break;
+    }
+    return env;
+}
+
 std::string environmentValue(const char* key, const char* fallback) {
     const char* value = std::getenv(key);
-    return value != nullptr && *value != '\0' ? value : fallback;
+    if (value != nullptr && *value != '\0') {
+        return value;
+    }
+    static const auto dotEnv = loadDotEnv();
+    const auto it = dotEnv.find(key);
+    if (it != dotEnv.end() && !it->second.empty()) {
+        return it->second;
+    }
+    return fallback;
 }
+
 
 QueryResult collectRows(sql::ResultSet& rows) {
     QueryResult result;
@@ -127,10 +182,9 @@ QueryResult Database::executePrepared(
     } else {
         try {
             const auto count = statement->getUpdateCount();
-            if (count >= 0) {
-                result.affectedRows = static_cast<std::size_t>(count);
-            }
+            result.affectedRows = static_cast<std::size_t>(count);
         } catch (const sql::SQLException&) {
+
             // Some Connector/C++ versions may not expose the update count.
             result.affectedRows = 0;
         }

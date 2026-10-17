@@ -24,15 +24,17 @@ QueryManager::QueryManager(std::size_t workerCount,
           workerCount,
           queue_,
           database,
-          [this](const Query& query, auto startedAt) {
-              markStarted(query, startedAt);
+          [this](const Query& query, auto workerIndex, auto startedAt) {
+              markStarted(query, workerIndex, startedAt);
           },
           [this](const Query& query,
+                 auto workerIndex,
                  const DatabaseResult& result,
                  const std::string& error,
                  auto startedAt,
                  auto finishedAt) {
-              markCompleted(query, result, error, startedAt, finishedAt);
+              markCompleted(
+                  query, workerIndex, result, error, startedAt, finishedAt);
           }) {
     workerPool_.start();
 }
@@ -58,6 +60,7 @@ Query QueryManager::submit(const std::string& sql, int priority) {
     snapshot.priority = query.priority;
     snapshot.status = QueryStatus::Queued;
     snapshot.submitTime = query.submitTime;
+    snapshot.submittedAt = query.submittedAt;
     queries_.emplace(query.id, std::move(snapshot));
 
     if (!queue_.push(query)) {
@@ -109,7 +112,9 @@ void QueryManager::shutdown() {
 }
 
 void QueryManager::markStarted(
-    const Query& query, std::chrono::steady_clock::time_point startedAt) {
+    const Query& query,
+    std::size_t workerIndex,
+    std::chrono::steady_clock::time_point startedAt) {
     std::lock_guard<std::mutex> lock(mutex_);
     auto found = queries_.find(query.id);
     if (found == queries_.end()) {
@@ -117,10 +122,13 @@ void QueryManager::markStarted(
     }
     found->second.status = QueryStatus::Running;
     found->second.startTime = startedAt;
+    found->second.startedAt = std::chrono::system_clock::now();
+    found->second.workerId = "worker-" + std::to_string(workerIndex + 1);
 }
 
 void QueryManager::markCompleted(
     const Query& query,
+    std::size_t workerIndex,
     const DatabaseResult& result,
     const std::string& error,
     std::chrono::steady_clock::time_point startedAt,
@@ -135,8 +143,17 @@ void QueryManager::markCompleted(
         snapshot.status = error.empty() ? QueryStatus::Completed : QueryStatus::Failed;
         snapshot.startTime = startedAt;
         snapshot.finishTime = finishedAt;
+        if (snapshot.startedAt.time_since_epoch().count() == 0) {
+            snapshot.startedAt = std::chrono::system_clock::now();
+        }
+        snapshot.finishedAt = std::chrono::system_clock::now();
+        snapshot.workerId = "worker-" + std::to_string(workerIndex + 1);
         snapshot.columns = result.columns;
         snapshot.rows = result.rows;
+        if (result.affectedRows.has_value()) {
+            snapshot.affectedRows = *result.affectedRows;
+            snapshot.affectedRowsAvailable = true;
+        }
         snapshot.result = result.message;
         snapshot.error = error;
     }

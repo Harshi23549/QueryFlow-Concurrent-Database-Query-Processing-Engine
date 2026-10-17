@@ -33,14 +33,18 @@ struct Query {
     std::string sql;
     int priority = 0;
     std::chrono::steady_clock::time_point submitTime;
+    std::chrono::system_clock::time_point submittedAt;
 
-    Query() : submitTime(std::chrono::steady_clock::now()) {}
+    Query()
+        : submitTime(std::chrono::steady_clock::now()),
+          submittedAt(std::chrono::system_clock::now()) {}
 
     Query(int id_, std::string sql_, int priority_ = 0)
         : id(id_),
           sql(std::move(sql_)),
           priority(priority_),
-          submitTime(std::chrono::steady_clock::now()) {}
+          submitTime(std::chrono::steady_clock::now()),
+          submittedAt(std::chrono::system_clock::now()) {}
 };
 
 struct QuerySnapshot {
@@ -51,8 +55,14 @@ struct QuerySnapshot {
     std::chrono::steady_clock::time_point submitTime;
     std::chrono::steady_clock::time_point startTime;
     std::chrono::steady_clock::time_point finishTime;
+    std::chrono::system_clock::time_point submittedAt;
+    std::chrono::system_clock::time_point startedAt;
+    std::chrono::system_clock::time_point finishedAt;
+    std::string workerId;
     std::vector<std::string> columns;
     std::vector<std::vector<std::string>> rows;
+    std::size_t affectedRows = 0;
+    bool affectedRowsAvailable = false;
     std::string result;
     std::string error;
 };

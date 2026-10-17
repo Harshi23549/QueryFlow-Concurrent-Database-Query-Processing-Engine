@@ -32,8 +32,10 @@ public:
 
 private:
     void markStarted(const Query& query,
+                     std::size_t workerIndex,
                      std::chrono::steady_clock::time_point startedAt);
     void markCompleted(const Query& query,
+                       std::size_t workerIndex,
                        const DatabaseResult& result,
                        const std::string& error,
                        std::chrono::steady_clock::time_point startedAt,

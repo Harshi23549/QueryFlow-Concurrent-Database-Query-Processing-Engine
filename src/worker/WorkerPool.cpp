@@ -45,10 +45,11 @@ void WorkerPool::start() {
 
 void WorkerPool::workerLoop() {
     Query query;
+    const size_t workerIndex = nextWorkerId_.fetch_add(1);
     while (queue_.waitAndPop(query)) {
         const auto startedAt = std::chrono::steady_clock::now();
         if (onStart_) {
-            onStart_(query, startedAt);
+            onStart_(query, workerIndex, startedAt);
         }
 
         DatabaseResult result;
@@ -63,7 +64,12 @@ void WorkerPool::workerLoop() {
 
         if (onComplete_) {
             onComplete_(
-                query, result, error, startedAt, std::chrono::steady_clock::now());
+                query,
+                workerIndex,
+                result,
+                error,
+                startedAt,
+                std::chrono::steady_clock::now());
         }
     }
 }

@@ -12,6 +12,9 @@ option(QUERYFLOW_ENABLE_MYSQL
 enable_testing()
 
 add_library(queryflow_core
+    src/batch/BatchReport.cpp
+    src/batch/BatchRunner.cpp
+    src/batch/SqlFileReader.cpp
     src/config/QueryFlowConfig.cpp
     src/database/DatabaseManager.cpp
     src/database/MockDatabaseManager.cpp
@@ -30,10 +33,12 @@ target_compile_options(queryflow_core PRIVATE -Wall -Wextra -Wpedantic)
 
 if(QUERYFLOW_ENABLE_MYSQL)
     find_path(MYSQL_CONCPP_INCLUDE_DIR
-        NAMES mysql/jdbc.h
+        NAMES mysql/jdbc.h mysql_driver.h
         HINTS
             ${MYSQL_CONCPP_ROOT}
             $ENV{MYSQL_CONCPP_ROOT}
+            ${CMAKE_CURRENT_SOURCE_DIR}/deps/mysql-connector
+            /tmp/queryflow-mysql-connector/usr
         PATH_SUFFIXES include
     )
     find_library(MYSQL_CONCPP_LIBRARY
@@ -41,7 +46,28 @@ if(QUERYFLOW_ENABLE_MYSQL)
         HINTS
             ${MYSQL_CONCPP_ROOT}
             $ENV{MYSQL_CONCPP_ROOT}
-        PATH_SUFFIXES lib lib64 lib64/vs14
+            ${CMAKE_CURRENT_SOURCE_DIR}/deps/mysql-connector
+            /tmp/queryflow-mysql-connector/usr
+        PATH_SUFFIXES lib lib64 lib64/vs14 lib/x86_64-linux-gnu
+    )
+    find_library(MYSQL_CLIENT_LIBRARY
+        NAMES mysqlclient mysqlclient.so.21
+        HINTS
+            ${MYSQL_CONCPP_ROOT}
+            $ENV{MYSQL_CONCPP_ROOT}
+            ${CMAKE_CURRENT_SOURCE_DIR}/deps/mysql-client
+            /tmp/queryflow-mysql-client/usr
+        PATH_SUFFIXES lib lib64 lib/x86_64-linux-gnu
+    )
+    find_path(BOOST_INCLUDE_DIR
+        NAMES boost/shared_ptr.hpp
+        HINTS
+            ${BOOST_ROOT}
+            $ENV{BOOST_ROOT}
+            ${CMAKE_CURRENT_SOURCE_DIR}/deps/boost
+            /tmp/queryflow-boost/usr
+            /tmp/queryflow-boost/usr/include
+        PATH_SUFFIXES include
     )
 
     if(NOT MYSQL_CONCPP_INCLUDE_DIR OR NOT MYSQL_CONCPP_LIBRARY)
@@ -56,9 +82,29 @@ if(QUERYFLOW_ENABLE_MYSQL)
         ${CMAKE_CURRENT_SOURCE_DIR}/database
         ${MYSQL_CONCPP_INCLUDE_DIR}
     )
+    if(BOOST_INCLUDE_DIR)
+        target_include_directories(queryflow_core PRIVATE ${BOOST_INCLUDE_DIR})
+    endif()
+
     target_link_libraries(queryflow_core PUBLIC ${MYSQL_CONCPP_LIBRARY})
+    if(MYSQL_CLIENT_LIBRARY)
+        target_link_libraries(queryflow_core PUBLIC ${MYSQL_CLIENT_LIBRARY})
+    endif()
+
+    get_filename_component(MYSQL_CONCPP_LIBDIR "${MYSQL_CONCPP_LIBRARY}" DIRECTORY)
+    set(QF_RPATH_DIRS "${MYSQL_CONCPP_LIBDIR}")
+    if(MYSQL_CLIENT_LIBRARY)
+        get_filename_component(MYSQL_CLIENT_LIBDIR "${MYSQL_CLIENT_LIBRARY}" DIRECTORY)
+        list(APPEND QF_RPATH_DIRS "${MYSQL_CLIENT_LIBDIR}")
+    endif()
+
+    set(CMAKE_BUILD_RPATH ${QF_RPATH_DIRS})
+    set(CMAKE_INSTALL_RPATH ${QF_RPATH_DIRS})
+    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -Wl,--disable-new-dtags")
+
     target_compile_definitions(queryflow_core PUBLIC QUERYFLOW_WITH_MYSQL=1)
 endif()
+
 
 add_executable(QueryFlow src/app/main.cpp)
 target_link_libraries(QueryFlow PRIVATE queryflow_core)
@@ -78,3 +124,8 @@ add_executable(EngineTests tests/engine_test.cpp)
 target_link_libraries(EngineTests PRIVATE queryflow_core)
 target_compile_options(EngineTests PRIVATE -UNDEBUG)
 add_test(NAME EngineTests COMMAND EngineTests)
+
+add_executable(BatchTests tests/batch_test.cpp)
+target_link_libraries(BatchTests PRIVATE queryflow_core)
+target_compile_options(BatchTests PRIVATE -UNDEBUG)
+add_test(NAME BatchTests COMMAND BatchTests)

@@ -26,6 +26,10 @@ QueryFlow/
 ├── README.md
 ├── include/
 │   └── queryflow/
+│       ├── batch/
+│       │   ├── BatchReport.h
+│       │   ├── BatchRunner.h
+│       │   └── SqlFileReader.h
 │       ├── config/
 │       │   └── QueryFlowConfig.h
 │       ├── core/
@@ -45,6 +49,10 @@ QueryFlow/
 │       └── worker/
 │           └── WorkerPool.h
 ├── src/
+│   ├── batch/
+│   │   ├── BatchReport.cpp
+│   │   ├── BatchRunner.cpp
+│   │   └── SqlFileReader.cpp
 │   ├── app/
 │   │   └── main.cpp
 │   ├── config/
@@ -64,6 +72,7 @@ QueryFlow/
 │   │   └── WorkerPool.cpp
 │   └── ...
 ├── tests/
+│   ├── batch_test.cpp
 │   ├── scheduler_test.cpp
 │   └── concurrency_test.cpp
 ├── docs/
@@ -150,6 +159,9 @@ Responsible for project configuration and tuning values.
 ### 9. App and tests
 
 - `src/app/main.cpp` – application startup point
+- `include/queryflow/batch` and `src/batch` – SQL file parser, batch execution,
+  CSV and human-readable reports
+- `tests/batch_test.cpp` – parser, mock execution, report and failure-path tests
 - `tests/scheduler_test.cpp` – scheduler validation
 - `tests/concurrency_test.cpp` – concurrency stress verification
 
@@ -172,57 +184,118 @@ The following are implemented and validated:
 - interactive CLI for query submission and status/results
 - concurrency stress tests
 - modular CMake build
+- demo backend plus an optional MySQL Connector/C++ backend (live DB requires
+  local connector/server configuration)
+- automated database initialization and seeding scripts (`scripts/setup_mysql.sh`, `scripts/start_mysql.sh`, `scripts/stop_mysql.sh`)
+- `.env` configuration file support for database credentials and connection parameters
+- SQL file batch execution with concurrent workers, per-query status/metrics,
+  and CSV/log reports
 
-The CLI currently uses a **demo database backend**. It exercises the engine
-pipeline and simulates query execution. The merged MySQL Connector/C++ module
-is available as an optional backend; it must be enabled at configure time and
-requires a running MySQL server and schema setup. The MySQL-enabled build and
-live server path have not yet been verified in this environment.
+## Quick start
 
-## Build and test
+### 1. Default demo build (no database required)
 
 ```bash
-cmake -S . -B build
-cmake --build build
-ctest --test-dir build --output-on-failure
+make
+make test
 ./build/QueryFlow --workers 4 --policy fcfs
 ```
 
-To build with MySQL Connector/C++ installed:
+### 2. Live MySQL build
+
+To set up the database and run QueryFlow with real MySQL query execution:
 
 ```bash
-cmake -S . -B build-mysql -DQUERYFLOW_ENABLE_MYSQL=ON
-cmake --build build-mysql
-./build-mysql/QueryFlow --backend mysql --workers 4 --policy fcfs
+# 1. Initialize, start MySQL server instance, and load schema/seed data
+make db-setup
+
+# 2. Build with MySQL Connector/C++ enabled
+make build-mysql
+
+# 3. Run all unit and integration tests
+make test-mysql
+
+# 4. Start QueryFlow CLI with live MySQL backend
+make run-mysql
 ```
 
-Configure connection values through environment variables (do not put
-credentials in source files):
+Alternatively, run directly with flags:
+```bash
+./build-mysql/QueryFlow --backend mysql --workers 4 --policy priority
+```
+
+### SQL workload batch mode
+
+An explicitly supplied SQL file runs in batch mode through the same
+QueryManager, scheduler, queue, worker pool, and selected database backend.
+For example:
 
 ```bash
-export QUERYFLOW_DB_HOST=127.0.0.1
-export QUERYFLOW_DB_PORT=3306
-export QUERYFLOW_DB_NAME=queryflow
-export QUERYFLOW_DB_USER=queryflow_app
-export QUERYFLOW_DB_PASSWORD='your-password'
+./build-mysql/QueryFlow \
+  --backend mysql \
+  --file database/workload.sql \
+  --workers 4 \
+  --policy FCFS \
+  --priority 0 \
+  --log-dir logs
 ```
 
-Create the schema before starting QueryFlow:
+The demo backend can also exercise the batch workflow without a database:
 
 ```bash
-mysql -u root -p < database/schema.sql
+./build/QueryFlow --backend demo --file database/workload.sql \
+  --workers 4 --policy priority --log-dir logs
 ```
 
-Create/configure a database account with permissions for the schema, then set
-the matching `QUERYFLOW_DB_USER` and `QUERYFLOW_DB_PASSWORD` values. Do not
-commit actual credentials.
+The demo backend simulates execution and does not parse/execute SQL. The MySQL
+backend executes the statements and requires successful database setup.
+Reports are written to unique `logs/queryflow-batch-<timestamp>.log` and
+`.csv` paths. Quoted and numeric SQL literal values are redacted in report SQL
+fields; do not put credentials in SQL text.
+
+The file reader supports ordinary statements separated by semicolons,
+multiline statements, `--` and `#` line comments, `/* ... */` block comments,
+quoted strings/identifiers, and a final statement without a semicolon. It is a
+statement splitter, not a complete MySQL script parser: stored routines,
+`DELIMITER` directives, and other delimiter-changing scripts are unsupported.
+Malformed quotes/comments and files with no statements are rejected before
+execution. A database syntax/runtime error is reported against that
+statement’s number, while remaining accepted statements continue.
+
+Batch elapsed time begins immediately before the first submission and ends
+when all accepted queries reach a terminal state. Throughput is completed
+queries divided by that elapsed interval. Average wait/execution/response
+metrics include completed queries only; failed or missing timings are not
+treated as zero. Returned-row counts are reported only for result-set queries,
+and affected-row counts only when provided by the backend. Unavailable values
+are written as `N/A`.
+
+You can also run the standalone database adapter demo:
+```bash
+make db-demo
+```
+
+### Database management commands
+
+- `make db-setup` – initialize isolated database directory, start server, apply schema and seed data, and generate `.env`
+- `make db-start` – start the MySQL server daemon
+- `make db-stop`  – stop the MySQL server daemon
+- `make db-demo`  – compile and execute the transactional C++ database demo
+
+Connection configuration is loaded automatically from `.env` in the project root, or can be specified via environment variables or CLI flags:
+
+```bash
+./build-mysql/QueryFlow --backend mysql \
+    --db-host 127.0.0.1 \
+    --db-port 3307 \
+    --db-name queryflow \
+    --db-user queryflow_app \
+    --db-password queryflow_pass
+```
 
 The MySQL backend gives each worker thread its own connector connection.
-Submitted statements are executed as raw SQL, so only submit SQL you trust.
-Use prepared statements for any future interface that accepts untrusted values.
-If the Connector/C++ library is not installed, the default build remains
-available with `--backend demo`; selecting `--backend mysql` in that build
-prints an installation/configuration error.
+Submitted statements are executed concurrently across worker threads and return column headers, result rows, affected row counts, and latency metrics.
+
 
 CLI commands:
 

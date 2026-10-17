@@ -1,11 +1,14 @@
-build/
+build*/
+database/build/
+deps/
+database/data/
 bin/
 *.o
 *.out
 .vscode/
 .env
 *.log
+/logs/
 CMakeFiles/
 CMakeCache.txt
 cmake_install.cmake
-Makefile

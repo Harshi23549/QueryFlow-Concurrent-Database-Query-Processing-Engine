@@ -28,6 +28,10 @@ This project is structured so every team member can work on a specific part with
 - `include/queryflow/config`  
   Runtime configuration and future tuning parameters.
 
+- `include/queryflow/batch` and `src/batch`
+  SQL workload file parsing, submission through QueryManager, and batch report
+  generation.
+
 - `src/app`  
   CLI application entry point and interactive commands.
 
@@ -74,9 +78,9 @@ Tracks the performance numbers needed for analysis and reports.
 Provides a place for tuning worker count, policy selection, database settings, and deployment options.
 
 ### CLI
-The current CLI is in `src/app/main.cpp`. It accepts SQL text, reports status
-and timing, and can select either the demo backend or (when built with the
-connector) the MySQL backend using `--backend`.
+The current CLI is in `src/app/main.cpp`. It accepts SQL text or an explicit
+`--file` workload, reports status/timing, and can select either demo or (when
+built with the connector) MySQL using `--backend`.
 
 ## 4. How to contribute
 

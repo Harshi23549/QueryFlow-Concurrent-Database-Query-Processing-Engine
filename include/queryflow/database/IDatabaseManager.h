@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstddef>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -11,7 +12,7 @@ namespace queryflow {
 struct DatabaseResult {
     std::vector<std::string> columns;
     std::vector<std::vector<std::string>> rows;
-    std::size_t affectedRows = 0;
+    std::optional<std::size_t> affectedRows;
     std::string message;
 };
 

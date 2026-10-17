@@ -100,6 +100,7 @@ QueryFlow/
 ├── Makefile
 ├── README.md
 ├── include/queryflow/
+│   ├── batch/        SQL file reader, batch runner, report types
 │   ├── config/       QueryFlowConfig.h
 │   ├── core/         Query.h
 │   ├── database/     IDatabaseManager.h, DatabaseManager.h,
@@ -110,6 +111,7 @@ QueryFlow/
 │   ├── scheduler/    Scheduler.h
 │   └── worker/       WorkerPool.h
 ├── src/
+│   ├── batch/        SQL parsing and batch report generation
 │   ├── app/          main.cpp
 │   ├── config/       QueryFlowConfig.cpp
 │   ├── database/     DatabaseManager.cpp, MockDatabaseManager.cpp
@@ -119,6 +121,7 @@ QueryFlow/
 │   ├── scheduler/    Scheduler.cpp
 │   └── worker/       WorkerPool.cpp
 ├── tests/
+│   ├── batch_test.cpp
 │   ├── concurrency_test.cpp
 │   ├── engine_test.cpp
 │   └── scheduler_test.cpp
@@ -284,19 +287,29 @@ actual capabilities:
   lifecycle timestamps and displayed by the CLI.
 - **CLI:** Supports SQL-line submission, explicit priority, status inspection,
   waiting for completion, and graceful draining on exit.
+- **SQL batch mode:** An explicitly supplied `--file` is parsed, submitted
+  through QueryManager, and awaited through terminal status. The batch runner
+  writes per-statement logs/CSV and a summary without bypassing the scheduler.
 - **Tests/build structure:** CMake builds the CLI and registers scheduler,
-  concurrency, and engine lifecycle tests.
+  concurrency, engine lifecycle, and batch parser/report tests.
 
 ### Optional / environment-dependent
 
-- **MySQL backend:** The merged Connector/C++ adapter is wired into the CLI
-  behind `QUERYFLOW_ENABLE_MYSQL`. The default build remains demo-only so it
-  can compile without connector libraries. MySQL mode still requires the
-  Connector/C++ development package, a running server, credentials, and the
-  supplied schema. This environment did not have the connector installed, so
-  the MySQL-enabled compilation and live server execution still need testing.
-- **Configuration:** The config struct is not yet loaded from a file or CLI
-  options. Worker count and scheduling policy are currently CLI options.
+- **MySQL backend:** The merged Connector/C++ adapter is fully wired into the CLI
+  and tests behind `QUERYFLOW_ENABLE_MYSQL`. The default build remains demo-only so it
+  can compile without connector libraries. In MySQL mode, dependencies (Connector/C++,
+  libmysqlclient, Boost headers) are automatically detected and linked with DT_RPATH.
+  A user-space MySQL instance is managed via `scripts/setup_mysql.sh` and Makefile
+  targets (`db-setup`, `db-start`, `db-stop`, `db-demo`). Live SQL query execution,
+  concurrency across worker threads, and transactions are fully verified.
+- **Configuration:** `QueryFlowConfig` loads runtime values from environment
+  variables and `.env` file fallbacks (`QueryFlowConfig::fromEnvironment()`).
+  Worker count, scheduling policy, backend selection, and database connection
+  settings can also be provided via CLI arguments.
+- **SQL file parser scope:** Supports ordinary semicolon-delimited statements,
+  comments, and quoted values/identifiers. Stored routines and `DELIMITER`
+  changes are not supported.
+
 
 ## 9. How to add a feature in this project
 

@@ -41,7 +41,9 @@ DatabaseResult DatabaseManager::execute(const Query& query) {
     const auto databaseResult = state_->connectionForCurrentThread().execute(query.sql);
     DatabaseResult result;
     result.columns = databaseResult.columns;
-    result.affectedRows = static_cast<std::size_t>(databaseResult.affectedRows);
+    if (databaseResult.columns.empty()) {
+        result.affectedRows = static_cast<std::size_t>(databaseResult.affectedRows);
+    }
     result.rows.reserve(databaseResult.rows.size());
     for (const auto& databaseRow : databaseResult.rows) {
         auto& row = result.rows.emplace_back();

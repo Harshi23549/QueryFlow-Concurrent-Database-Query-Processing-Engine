@@ -14,9 +14,11 @@ namespace queryflow {
 class WorkerPool {
 public:
     using StartHandler =
-        std::function<void(const Query&, std::chrono::steady_clock::time_point)>;
+        std::function<void(
+            const Query&, std::size_t, std::chrono::steady_clock::time_point)>;
     using CompletionHandler = std::function<void(
         const Query&,
+        std::size_t,
         const DatabaseResult&,
         const std::string&,
         std::chrono::steady_clock::time_point,
@@ -46,6 +48,7 @@ private:
     std::vector<std::thread> workers_;
     std::atomic<bool> started_{false};
     std::atomic<bool> stopped_{false};
+    std::atomic<size_t> nextWorkerId_{0};
 };
 
 }  // namespace queryflow
