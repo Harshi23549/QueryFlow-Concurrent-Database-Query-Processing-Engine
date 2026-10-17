@@ -1,27 +1,46 @@
-CXX      := g++
-CXXFLAGS := -std=c++17 -pthread -Wall -Wextra -O2
-TARGET   := concurrency_test
+BUILD_DIR ?= build
+BUILD_MYSQL_DIR ?= build-mysql
+BUILD_TYPE ?= Debug
 
-SRCS := ConcurrencyTest.cpp SharedQueryQueue.cpp WorkerPool.cpp MockDatabaseManager.cpp
-OBJS := $(SRCS:.cpp=.o)
+.PHONY: all configure build-mysql configure-mysql run run-mysql test test-mysql db-start db-stop db-setup db-demo clean
 
-.PHONY: all run clean tsan
+all: configure
+	cmake --build $(BUILD_DIR)
 
-all: $(TARGET)
+configure:
+	cmake -S . -B $(BUILD_DIR) -DCMAKE_BUILD_TYPE=$(BUILD_TYPE)
 
-run: $(TARGET)
-	./$(TARGET)
+build-mysql: configure-mysql
+	cmake --build $(BUILD_MYSQL_DIR)
 
-$(TARGET): $(OBJS)
-	$(CXX) $(CXXFLAGS) -o $@ $(OBJS)
+configure-mysql:
+	cmake -S . -B $(BUILD_MYSQL_DIR) -DCMAKE_BUILD_TYPE=$(BUILD_TYPE) -DQUERYFLOW_ENABLE_MYSQL=ON
 
-%.o: %.cpp
-	$(CXX) $(CXXFLAGS) -c $< -o $@
+run: all
+	./$(BUILD_DIR)/QueryFlow
 
-# Build with ThreadSanitizer to check for data races.
-tsan: CXXFLAGS += -fsanitize=thread -g -O1
-tsan: clean $(TARGET)
-	./$(TARGET)
+run-mysql: build-mysql
+	./$(BUILD_MYSQL_DIR)/QueryFlow --backend mysql
+
+test: all
+	ctest --test-dir $(BUILD_DIR) --output-on-failure
+
+test-mysql: build-mysql
+	ctest --test-dir $(BUILD_MYSQL_DIR) --output-on-failure
+
+db-start:
+	./scripts/start_mysql.sh
+
+db-stop:
+	./scripts/stop_mysql.sh
+
+db-setup:
+	./scripts/setup_mysql.sh
+
+db-demo:
+	cmake -S database -B database/build -DCMAKE_BUILD_TYPE=$(BUILD_TYPE)
+	cmake --build database/build
+	./database/build/queryflow_db_demo
 
 clean:
-	rm -f $(OBJS) $(TARGET)
+	cmake -E rm -rf $(BUILD_DIR) $(BUILD_MYSQL_DIR) database/build
