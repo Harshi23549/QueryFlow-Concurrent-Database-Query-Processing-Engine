@@ -1,11 +1,28 @@
 #include "Database.hpp"
 
+#if __has_include(<mysql/jdbc.h>)
 #include <mysql/jdbc.h>
+#else
+#include <mysql_connection.h>
+#include <mysql_driver.h>
+#include <cppconn/datatype.h>
+#include <cppconn/exception.h>
+#include <cppconn/prepared_statement.h>
+#include <cppconn/resultset.h>
+#include <cppconn/resultset_metadata.h>
+#include <cppconn/statement.h>
+#endif
 
+#include <algorithm>
+#include <cctype>
 #include <cstdlib>
+#include <fstream>
+#include <map>
 #include <mutex>
+#include <sstream>
 #include <stdexcept>
 #include <utility>
+#include <vector>
 
 namespace queryflow::db {
 namespace {
@@ -17,10 +34,51 @@ sql::Driver* connectorDriver() {
     return driver;
 }
 
+std::string trimEnv(const std::string& str) {
+    const auto first = str.find_first_not_of(" \t\r\n'\"");
+    if (first == std::string::npos) return "";
+    const auto last = str.find_last_not_of(" \t\r\n'\"");
+    return str.substr(first, last - first + 1);
+}
+
+std::map<std::string, std::string> loadDotEnv() {
+    std::map<std::string, std::string> env;
+    const std::vector<std::string> paths = {".env", "../.env", "../../.env"};
+    for (const auto& path : paths) {
+        std::ifstream file(path);
+        if (!file.is_open()) continue;
+        std::string line;
+        while (std::getline(file, line)) {
+            const auto commentPos = line.find('#');
+            if (commentPos != std::string::npos) {
+                line = line.substr(0, commentPos);
+            }
+            const auto eqPos = line.find('=');
+            if (eqPos == std::string::npos) continue;
+            const auto key = trimEnv(line.substr(0, eqPos));
+            const auto val = trimEnv(line.substr(eqPos + 1));
+            if (!key.empty()) {
+                env[key] = val;
+            }
+        }
+        break;
+    }
+    return env;
+}
+
 std::string environmentValue(const char* key, const char* fallback) {
     const char* value = std::getenv(key);
-    return value != nullptr && *value != '\0' ? value : fallback;
+    if (value != nullptr && *value != '\0') {
+        return value;
+    }
+    static const auto dotEnv = loadDotEnv();
+    const auto it = dotEnv.find(key);
+    if (it != dotEnv.end() && !it->second.empty()) {
+        return it->second;
+    }
+    return fallback;
 }
+
 
 QueryResult collectRows(sql::ResultSet& rows) {
     QueryResult result;
@@ -115,29 +173,169 @@ QueryResult Database::executePrepared(
         }
     }
 
-    
     QueryResult result;
-    const bool hasRows = statement->execute();
+    std::istringstream sqlType(sqlText);
+    std::string command;
+    sqlType >> command;
+    std::transform(command.begin(), command.end(), command.begin(), [](unsigned char ch) {
+        return static_cast<char>(std::toupper(ch));
+    });
 
-    if (hasRows) {
+    if (command == "SELECT" || command == "SHOW" || command == "DESCRIBE" ||
+        command == "DESC" || command == "EXPLAIN") {
+        if (!statement->execute()) {
+            throw std::runtime_error("Prepared query did not return a result set");
+        }
         std::unique_ptr<sql::ResultSet> rows(statement->getResultSet());
         if (rows) {
             result = collectRows(*rows);
         }
     } else {
-        try {
-            const auto count = statement->getUpdateCount();
-            if (count >= 0) {
-                result.affectedRows = static_cast<std::size_t>(count);
-            }
-        } catch (const sql::SQLException&) {
-            // Some Connector/C++ versions may not expose the update count.
-            result.affectedRows = 0;
-        }
+        result.affectedRows =
+            static_cast<unsigned long long>(statement->executeUpdate());
     }
 
     return result;
+}
+
+QueryResult Database::checkout(std::uint64_t customerId,
+                               const std::string& recipientName,
+                               const std::string& addressLine,
+                               const std::string& city,
+                               const std::string& region,
+                               const std::string& postalCode,
+                               const std::string& country) {
+    if (customerId == 0) {
+        throw std::invalid_argument("Customer ID must be positive");
     }
+
+    auto transaction = beginTransaction();
+    const auto address = executePrepared(
+        "INSERT INTO customer_addresses "
+        "(customer_id, recipient_name, address_line, city, region, postal_code, country) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?)",
+        {std::to_string(customerId), recipientName, addressLine, city, region,
+         postalCode, country});
+    if (!address.affectedRows.has_value() || *address.affectedRows != 1) {
+        throw std::runtime_error("Could not save the shipping address");
+    }
+    const auto insertedAddress = execute("SELECT LAST_INSERT_ID()");
+    if (insertedAddress.rows.empty() || insertedAddress.rows.front().empty() ||
+        !insertedAddress.rows.front().front().has_value()) {
+        throw std::runtime_error("Could not obtain the shipping address ID");
+    }
+    const auto addressId = *insertedAddress.rows.front().front();
+    const auto addressSnapshot = recipientName + ", " + addressLine + ", " + city +
+                                 ", " + region + " " + postalCode + ", " + country;
+
+    const auto cart = executePrepared(
+        "SELECT p.product_id, p.product_name, ci.quantity, p.stock_quantity, p.active "
+        "FROM shopping_carts c "
+        "JOIN shopping_cart_items ci ON ci.cart_id = c.cart_id "
+        "JOIN products p ON p.product_id = ci.product_id "
+        "WHERE c.customer_id = ? FOR UPDATE",
+        {std::to_string(customerId)});
+    if (cart.rows.empty()) {
+        throw std::runtime_error("Your cart is empty");
+    }
+    for (const auto& item : cart.rows) {
+        if (item.size() < 5 || !item[2].has_value() || !item[3].has_value() ||
+            !item[4].has_value() || *item[4] != "1") {
+            throw std::runtime_error("An item in your cart is unavailable");
+        }
+        if (std::stoull(*item[2]) > std::stoull(*item[3])) {
+            throw std::runtime_error("An item in your cart is out of stock");
+        }
+    }
+
+    executePrepared(
+        "UPDATE products p "
+        "JOIN shopping_cart_items ci ON ci.product_id = p.product_id "
+        "JOIN shopping_carts c ON c.cart_id = ci.cart_id "
+        "SET p.stock_quantity = p.stock_quantity - ci.quantity "
+        "WHERE c.customer_id = ?",
+        {std::to_string(customerId)});
+
+    const auto insertedOrder = executePrepared(
+        "INSERT INTO orders "
+        "(customer_id, address_id, order_status, payment_status, total_amount, "
+        "shipping_address_snapshot) "
+        "SELECT ?, ?, 'confirmed', 'simulated', "
+        "SUM(ci.quantity * p.unit_price), ? "
+        "FROM shopping_carts c "
+        "JOIN shopping_cart_items ci ON ci.cart_id = c.cart_id "
+        "JOIN products p ON p.product_id = ci.product_id "
+        "WHERE c.customer_id = ?",
+        {std::to_string(customerId), addressId, addressSnapshot,
+         std::to_string(customerId)});
+    if (!insertedOrder.affectedRows.has_value() ||
+        *insertedOrder.affectedRows != 1) {
+        throw std::runtime_error("Could not create the order");
+    }
+
+    const auto generated = execute("SELECT LAST_INSERT_ID()");
+    if (generated.rows.empty() || generated.rows.front().empty() ||
+        !generated.rows.front().front().has_value()) {
+        throw std::runtime_error("Could not obtain the new order ID");
+    }
+    const auto orderId = std::stoull(*generated.rows.front().front());
+    const auto orderIdText = std::to_string(orderId);
+
+    executePrepared(
+        "INSERT INTO order_items "
+        "(order_id, product_id, product_name_snapshot, quantity, unit_price) "
+        "SELECT ?, p.product_id, p.product_name, ci.quantity, p.unit_price "
+        "FROM shopping_carts c "
+        "JOIN shopping_cart_items ci ON ci.cart_id = c.cart_id "
+        "JOIN products p ON p.product_id = ci.product_id "
+        "WHERE c.customer_id = ?",
+        {orderIdText, std::to_string(customerId)});
+    executePrepared(
+        "INSERT INTO payments "
+        "(order_id, payment_method, payment_status, amount) "
+        "SELECT ?, 'classroom_simulation', 'simulated', total_amount "
+        "FROM orders WHERE order_id = ?",
+        {orderIdText, orderIdText});
+    executePrepared(
+        "INSERT INTO order_status_history (order_id, status, note) "
+        "VALUES (?, 'confirmed', 'Order confirmed; payment is simulated')",
+        {orderIdText});
+    executePrepared(
+        "DELETE ci FROM shopping_cart_items ci "
+        "JOIN shopping_carts c ON c.cart_id = ci.cart_id "
+        "WHERE c.customer_id = ?",
+        {std::to_string(customerId)});
+
+    const auto order = executePrepared(
+        "SELECT order_id, order_status, payment_status, "
+        "CAST(total_amount AS CHAR) "
+        "FROM orders WHERE order_id = ?",
+        {orderIdText});
+    if (order.rows.size() != 1) {
+        throw std::runtime_error("Could not load the confirmed order");
+    }
+    const auto items = executePrepared(
+        "SELECT product_name_snapshot, quantity, CAST(unit_price AS CHAR) "
+        "FROM order_items WHERE order_id = ? ORDER BY order_item_id",
+        {orderIdText});
+    if (items.rows.empty()) {
+        throw std::runtime_error("Could not load the confirmed order items");
+    }
+
+    QueryResult receipt;
+    receipt.columns = {"order_id", "order_status", "payment_status", "total_amount",
+                       "product_name_snapshot", "quantity", "unit_price"};
+    for (const auto& item : items.rows) {
+        if (item.size() != 3) {
+            throw std::runtime_error("Confirmed order item data is incomplete");
+        }
+        auto row = order.rows.front();
+        row.insert(row.end(), item.begin(), item.end());
+        receipt.rows.push_back(std::move(row));
+    }
+    transaction.commit();
+    return receipt;
+}
 
 bool Database::ping() {
     const auto result = execute("SELECT 1 AS connection_ok");
@@ -206,4 +404,4 @@ void Transaction::rollback() {
     active_ = false;
 }
 
-} // namespace queryflow::db
+}  // namespace queryflow::db
