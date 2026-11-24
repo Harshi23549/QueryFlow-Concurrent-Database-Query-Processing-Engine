@@ -1,248 +1,203 @@
-# QueryFlow: Concurrent Database Query Processing Engine
+# QueryFlow
 
-**QueryFlow** is an OS + DBMS project that explores how multiple database queries can be processed concurrently in a structured and measurable way.
+QueryFlow is a C++17 concurrent query-processing engine with a local shopping
+application. Customers can create accounts, browse products, keep a database-
+backed cart, place simulated orders, and see order confirmations and history.
+An independent operations page visualizes how customer actions pass through
+the query manager, shared queue, scheduler, worker threads, and MySQL.
 
-The project combines **multithreading, synchronization, worker threads, and scheduling** with **SQL execution, database integration, transactions, and performance analysis**.
+The application binds to `127.0.0.1`. It is designed for local development and
+classroom use, not public internet deployment. Payments are simulated.
+
+## Run the application
+
+The one-command path expects CMake, a C++17 compiler, Boost 1.74+, nlohmann
+JSON, OpenSSL development files, MySQL 8.0 server/client tools, and MySQL
+Connector/C++ to be installed:
+
+```bash
+make project
+```
+
+This initializes the local MySQL instance, applies the schema and sample
+catalog, builds the MySQL-enabled application in `build-project/`, and starts
+two web listeners:
+
+- Customer storefront on port `8080`: <http://127.0.0.1:8080/>
+- Admin monitor on port `8081`, on this computer only: <http://127.0.0.1:8081/>
+
+The storefront listens on all network interfaces so other devices on the same
+LAN can open it. On each device, use `http://<this-computer-LAN-IP>:8080/`
+(find the computer's address with `hostname -I`). All devices share the same
+MySQL-backed catalog and can submit requests concurrently; their work appears
+in the admin monitor. Only open port 8080 on a trusted local network. The admin
+port is deliberately bound to loopback and cannot be reached from other
+devices.
+
+Stop the server with Ctrl+C. Stop the local database separately with
+`make db-stop`. Database defaults are stored in the generated `.env` file.
+Override them with `QUERYFLOW_DB_*` environment variables; the database name
+defaults to `queryflow`.
+To choose different web ports, run `make project STOREFRONT_PORT=8090
+ADMIN_PORT=8091`.
+
+The `build-project` directory is separate from other CMake build directories,
+so a stale cache from another checkout will not affect this command. To use
+the mock backend instead of MySQL for engine development:
+
+```bash
+make
+make test
+./build/QueryFlow --backend mock --web --host 0.0.0.0
+```
+
+The mock backend does not persist accounts or orders and is not the normal
+storefront path. MySQL support requires the Connector/C++ library and is built
+separately:
+
+```bash
+make db-setup
+make build-mysql
+./build-mysql/QueryFlow --backend mysql --web
+```
+
+Use `./build/QueryFlow --help` for CLI and batch options.
+
+## Application flow
+
+```mermaid
+flowchart LR
+  Browser[Customer storefront] -->|account, cart, checkout actions| API[HTTP API]
+  API --> QM[Query manager]
+  QM --> Q[Shared synchronized queue]
+  Q --> S[FCFS or priority scheduler]
+  S --> W[Worker pool]
+  W --> DB[MySQL database]
+  DB --> API
+  API -->|confirmation and order history| Browser
+  API -->|in-process snapshots and events| Ops[Operations page]
+```
+
+The browser sends typed business actions, not SQL. The API maps those actions
+to fixed SQL statements and prepared-statement parameters. QueryFlow assigns
+work IDs, schedules requests, and executes them with a bounded worker pool.
+Commerce records are persistent in MySQL; queue state, worker state, metrics,
+and lifecycle events are in memory and reset when the application stops.
+
+The operations page is an unauthenticated local engineering view. Do not bind
+the service to a public interface or expose it to untrusted networks.
+
+## Data model
+
+`customer_id` is the primary key for customer-owned data and is used as the
+foreign key in carts, addresses, and orders. Order items preserve the product
+name and unit price at purchase time so catalog edits do not rewrite receipts.
+
+```mermaid
+erDiagram
+  CUSTOMERS ||--|| SHOPPING_CARTS : owns
+  SHOPPING_CARTS ||--o{ SHOPPING_CART_ITEMS : contains
+  PRODUCTS ||--o{ SHOPPING_CART_ITEMS : selected
+  CATEGORIES ||--o{ PRODUCTS : groups
+  CUSTOMERS ||--o{ CUSTOMER_ADDRESSES : saves
+  CUSTOMERS ||--o{ ORDERS : places
+  CUSTOMER_ADDRESSES o|--o{ ORDERS : ships_to
+  ORDERS ||--|{ ORDER_ITEMS : contains
+  PRODUCTS ||--o{ ORDER_ITEMS : sold_as
+  ORDERS ||--o| PAYMENTS : records
+  ORDERS ||--o{ ORDER_STATUS_HISTORY : tracks
+
+  CUSTOMERS {
+    bigint customer_id PK
+    varchar full_name
+    varchar email UK
+    char password_hash
+    char password_salt
+  }
+  CATEGORIES {
+    bigint category_id PK
+    varchar category_name UK
+  }
+  PRODUCTS {
+    bigint product_id PK
+    varchar sku UK
+    bigint category_id FK
+    decimal unit_price
+    int stock_quantity
+  }
+  SHOPPING_CARTS {
+    bigint cart_id PK
+    bigint customer_id FK,UK
+  }
+  SHOPPING_CART_ITEMS {
+    bigint cart_id PK,FK
+    bigint product_id PK,FK
+    int quantity
+  }
+  CUSTOMER_ADDRESSES {
+    bigint address_id PK
+    bigint customer_id FK
+  }
+  ORDERS {
+    bigint order_id PK
+    bigint customer_id FK
+    bigint address_id FK
+    decimal total_amount
+    varchar shipping_address_snapshot
+  }
+  ORDER_ITEMS {
+    bigint order_item_id PK
+    bigint order_id FK
+    bigint product_id FK
+    decimal unit_price
+  }
+  PAYMENTS {
+    bigint payment_id PK
+    bigint order_id FK,UK
+    decimal amount
+    varchar payment_status
+  }
+  ORDER_STATUS_HISTORY {
+    bigint history_id PK
+    bigint order_id FK
+    varchar status
+  }
+```
+
+The schema is in [database/schema.sql](./database/schema.sql) and starter
+catalog data is in [database/seed.sql](./database/seed.sql). Checkout is a
+single transaction that verifies inventory, decrements stock, saves the order,
+items, simulated payment and status history, and empties the cart.
+
+## Engine capabilities
+
+- Thread-safe producer/consumer queue and bounded reusable worker threads.
+- Priority scheduling with FCFS tie-breaking and a separate FCFS policy.
+- Query snapshots, lifecycle events, worker state, and execution metrics.
+- Mock backend for engine tests and optional MySQL Connector/C++ execution.
+- CLI SQL workload mode with log/CSV reports.
+- Browser UI served by the C++ HTTP API; user actions go through
+  `QueryManager`.
+
+## Local limitations
+
+- Passwords are hashed with PBKDF2-HMAC-SHA256; session tokens are held in
+  server memory and expire when the process restarts.
+- Checkout records a simulated payment only; no real payment provider is used.
+- The operations page has no authentication and is suitable only on loopback.
+- Engine telemetry is not written to durable storage; the database
+  `query_execution_log` table is a schema extension, not currently populated
+  by the in-memory engine.
+- This project is not configured for production hosting, TLS, public
+  authentication, deployment, or operational monitoring.
 
 ## Team
 
-- **Harshita Aggarwal** - Core Engine & Integration
-- **Disha Suthar** - Concurrency & Worker System
-- **Sakshi Tiwari** - Scheduling & Performance
-- **Tanisha Pokhriyal** - Database & SQL
+- Harshita Aggarwal — Core Engine & Integration
+- Disha Suthar — Concurrency & Worker System
+- Sakshi Tiwari — Scheduling & Performance
+- Tanisha Pokhriyal — Database & SQL
 
-## Project goal
-
-QueryFlow is designed to help the team understand how application-level scheduling interacts with database execution. The system receives SQL tasks, organizes them, schedules them, executes them concurrently, and records performance metrics for analysis.
-
-## Project structure for the whole team
-
-The repository is now organized by module so every team member can clearly see what belongs to which component.
-
-```text
-QueryFlow/
-├── CMakeLists.txt
-├── Makefile
-├── README.md
-├── include/
-│   └── queryflow/
-│       ├── config/
-│       │   └── QueryFlowConfig.h
-│       ├── core/
-│       │   └── Query.h
-│       ├── database/
-│       │   ├── DatabaseManager.h
-│       │   ├── IDatabaseManager.h
-│       │   └── MockDatabaseManager.h
-│       ├── manager/
-│       │   └── QueryManager.h
-│       ├── metrics/
-│       │   └── QueryMetrics.h
-│       ├── queue/
-│       │   └── SharedQueryQueue.h
-│       ├── scheduler/
-│       │   └── Scheduler.h
-│       └── worker/
-│           └── WorkerPool.h
-├── src/
-│   ├── app/
-│   │   └── main.cpp
-│   ├── config/
-│   │   └── QueryFlowConfig.cpp
-│   ├── database/
-│   │   ├── DatabaseManager.cpp
-│   │   └── MockDatabaseManager.cpp
-│   ├── manager/
-│   │   └── QueryManager.cpp
-│   ├── metrics/
-│   │   └── QueryMetrics.cpp
-│   ├── queue/
-│   │   └── SharedQueryQueue.cpp
-│   ├── scheduler/
-│   │   └── Scheduler.cpp
-│   ├── worker/
-│   │   └── WorkerPool.cpp
-│   └── ...
-├── tests/
-│   ├── scheduler_test.cpp
-│   └── concurrency_test.cpp
-├── docs/
-│   └── TEAM_MODULE_GUIDE.md
-└── build/
-```
-
-## Module breakdown
-
-### 1. Core
-Responsible for the shared query representation used through every stage of the system.
-
-- `include/queryflow/core/Query.h`
-- `Query` stores the SQL string, id, and submission time.
-
-### 2. Queue
-Responsible for producer-consumer synchronization.
-
-- `include/queryflow/queue/SharedQueryQueue.h`
-- `src/queue/SharedQueryQueue.cpp`
-
-Features:
-- thread-safe queue
-- mutex + condition variable
-- blocking pop until work is available
-- clean shutdown behavior
-
-### 3. Scheduler
-Responsible for deciding which queued query runs next.
-
-- `include/queryflow/scheduler/Scheduler.h`
-- `src/scheduler/Scheduler.cpp`
-
-Supported policies:
-- FCFS
-- Priority scheduling
-
-Also calculates:
-- waiting time
-- execution time
-- response time
-
-### 4. Worker Pool
-Responsible for executing queued tasks concurrently.
-
-- `include/queryflow/worker/WorkerPool.h`
-- `src/worker/WorkerPool.cpp`
-
-Features:
-- configurable worker count
-- reusable threads
-- database execution through interface
-- safe shutdown
-
-### 5. Database Layer
-Responsible for the abstraction over actual database execution.
-
-- `include/queryflow/database/IDatabaseManager.h`
-- `include/queryflow/database/DatabaseManager.h`
-- `include/queryflow/database/MockDatabaseManager.h`
-
-This layer keeps the engine testable before real MySQL integration is added.
-
-### 6. Query Manager
-Responsible for managing query submission and overall orchestration.
-
-- `include/queryflow/manager/QueryManager.h`
-- `src/manager/QueryManager.cpp`
-
-This is the future coordination layer between the client and the worker pool.
-
-### 7. Metrics
-Responsible for measuring and reporting execution performance.
-
-- `include/queryflow/metrics/QueryMetrics.h`
-- `src/metrics/QueryMetrics.cpp`
-
-### 8. Config
-Responsible for project configuration and tuning values.
-
-- `include/queryflow/config/QueryFlowConfig.h`
-- `src/config/QueryFlowConfig.cpp`
-
-### 9. App and tests
-
-- `src/app/main.cpp` – application startup point
-- `tests/scheduler_test.cpp` – scheduler validation
-- `tests/concurrency_test.cpp` – concurrency stress verification
-
-## Technologies
-
-- **C++17**
-- **CMake**
-- **MySQL Connector/C++** (optional runtime backend)
-- **Linux**
-- **Git & GitHub**
-
-## Current verified deliverables
-
-The following are implemented and validated:
-
-- thread-safe queue
-- worker thread pool
-- FCFS and priority scheduling integrated with pending queue selection
-- query lifecycle tracking and waiting/execution/response metrics
-- interactive CLI for query submission and status/results
-- concurrency stress tests
-- modular CMake build
-
-The CLI currently uses a **demo database backend**. It exercises the engine
-pipeline and simulates query execution. The merged MySQL Connector/C++ module
-is available as an optional backend; it must be enabled at configure time and
-requires a running MySQL server and schema setup. The MySQL-enabled build and
-live server path have not yet been verified in this environment.
-
-## Build and test
-
-```bash
-cmake -S . -B build
-cmake --build build
-ctest --test-dir build --output-on-failure
-./build/QueryFlow --workers 4 --policy fcfs
-```
-
-To build with MySQL Connector/C++ installed:
-
-```bash
-cmake -S . -B build-mysql -DQUERYFLOW_ENABLE_MYSQL=ON
-cmake --build build-mysql
-./build-mysql/QueryFlow --backend mysql --workers 4 --policy fcfs
-```
-
-Configure connection values through environment variables (do not put
-credentials in source files):
-
-```bash
-export QUERYFLOW_DB_HOST=127.0.0.1
-export QUERYFLOW_DB_PORT=3306
-export QUERYFLOW_DB_NAME=queryflow
-export QUERYFLOW_DB_USER=queryflow_app
-export QUERYFLOW_DB_PASSWORD='your-password'
-```
-
-Create the schema before starting QueryFlow:
-
-```bash
-mysql -u root -p < database/schema.sql
-```
-
-Create/configure a database account with permissions for the schema, then set
-the matching `QUERYFLOW_DB_USER` and `QUERYFLOW_DB_PASSWORD` values. Do not
-commit actual credentials.
-
-The MySQL backend gives each worker thread its own connector connection.
-Submitted statements are executed as raw SQL, so only submit SQL you trust.
-Use prepared statements for any future interface that accepts untrusted values.
-If the Connector/C++ library is not installed, the default build remains
-available with `--backend demo`; selecting `--backend mysql` in that build
-prints an installation/configuration error.
-
-CLI commands:
-
-- Type a SQL statement to submit it at priority `0`.
-- `/submit <priority> <SQL>` submits a query with an explicit priority.
-- `/status` lists query IDs and states.
-- `/wait` waits until all submitted work finishes and prints results and
-  timing metrics.
-- `/quit` drains queued work and exits.
-
-Use `./build/QueryFlow --help` for usage. The selected backend is printed at
-startup.
-
-## Module ownership
-
-This structure allows each team member to work on a specific module without mixing all logic into one file:
-
-- Core, Manager, App: Harshita
-- Queue, Worker System: Disha
-- Scheduler, Metrics: Sakshi
-- Database, SQL Integration: Tanisha
-
-For more details, see [docs/TEAM_MODULE_GUIDE.md](./docs/TEAM_MODULE_GUIDE.md).
+See [docs/TEAM_MODULE_GUIDE.md](./docs/TEAM_MODULE_GUIDE.md) and
+[docs/PROJECT_STRUCTURE_AND_LEARNING_GUIDE.md](./docs/PROJECT_STRUCTURE_AND_LEARNING_GUIDE.md)
+for the codebase learning guide.

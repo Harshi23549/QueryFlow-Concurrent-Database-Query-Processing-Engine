@@ -14,12 +14,12 @@ int main() {
             return 1;
         }
 
-        // Exercise bound values and transaction methods without keeping demo rows.
+        // Exercise bound values and transaction methods without keeping test rows.
         auto transaction = database.beginTransaction();
         database.executePrepared(
             "INSERT INTO query_execution_log "
             "(scheduling_method, priority, query_label) VALUES (?, ?, ?)",
-            {std::string("FCFS"), std::string("0"), std::string("cpp_adapter_demo")});
+            {std::string("FCFS"), std::string("0"), std::string("cpp_adapter_test")});
 
         const auto idResult = database.execute("SELECT LAST_INSERT_ID() AS query_id");
         if (idResult.rows.empty() || !idResult.rows.front().front().has_value()) {
@@ -30,7 +30,7 @@ int main() {
         database.executePrepared(
             "UPDATE query_execution_log SET query_status='running', worker_id=?, "
             "started_at=CURRENT_TIMESTAMP(6) WHERE query_id=?",
-            {std::string("worker-demo"), queryId});
+            {std::string("worker-example"), queryId});
         database.executePrepared(
             "UPDATE query_execution_log SET query_status='succeeded', "
             "finished_at=CURRENT_TIMESTAMP(6), affected_rows=1 WHERE query_id=?",
@@ -45,11 +45,11 @@ int main() {
             const auto& value = metrics.rows.front()[i];
             std::cout << (value.has_value() ? *value : "NULL");
         }
-        std::cout << "\nRolling back demo row.\n";
+        std::cout << "\nRolling back the example row.\n";
         transaction.rollback();
         return 0;
     } catch (const std::exception& error) {
-        std::cerr << "Database smoke test failed: " << error.what() << '\n';
+        std::cerr << "Database transaction example failed: " << error.what() << '\n';
         return 1;
     }
 }

@@ -16,7 +16,7 @@ DatabaseResult MockDatabaseManager::execute(const Query& query) {
     }
 
     DatabaseResult result;
-    result.message = "Demo backend simulated execution; SQL was not sent to a database.";
+    result.message = "Mock backend simulated execution; SQL was not sent to a database.";
     return result;
 }
 

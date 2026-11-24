@@ -19,12 +19,14 @@ int Scheduler::selectNext(const std::vector<Query>& queries) const {
         bool chooseCurrent = false;
 
         if (policy_ == SchedulingPolicy::FCFS) {
-            chooseCurrent = queries[i].submitTime < queries[best].submitTime;
+            chooseCurrent =
+                queries[i].arrivalSequence < queries[best].arrivalSequence;
         } else {
             if (queries[i].priority > queries[best].priority) {
                 chooseCurrent = true;
             } else if (queries[i].priority == queries[best].priority &&
-                       queries[i].submitTime < queries[best].submitTime) {
+                       queries[i].arrivalSequence <
+                           queries[best].arrivalSequence) {
                 chooseCurrent = true;
             }
         }

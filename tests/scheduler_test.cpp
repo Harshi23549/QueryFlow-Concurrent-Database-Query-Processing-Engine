@@ -13,6 +13,9 @@ int main() {
         queryflow::Query(2, "SELECT 2", 3),
         queryflow::Query(3, "SELECT 3", 3)
     };
+    queries[0].arrivalSequence = 1;
+    queries[1].arrivalSequence = 2;
+    queries[2].arrivalSequence = 3;
     queries[0].submitTime = start;
     queries[1].submitTime = start + std::chrono::milliseconds(2);
     queries[2].submitTime = start + std::chrono::milliseconds(1);
@@ -21,11 +24,11 @@ int main() {
     assert(fcfs.selectNext(queries) == 0);
 
     queryflow::Scheduler priority(queryflow::SchedulingPolicy::PRIORITY);
-    assert(priority.selectNext(queries) == 2);
+    assert(priority.selectNext(queries) == 1);
 
     queries[1].priority = 3;
     queries[2].priority = 3;
-    assert(priority.selectNext(queries) == 2);
+    assert(priority.selectNext(queries) == 1);
 
     std::vector<queryflow::Query> empty;
     assert(fcfs.selectNext(empty) == -1);
@@ -33,9 +36,17 @@ int main() {
     queryflow::SharedQueryQueue priorityQueue(queryflow::SchedulingPolicy::PRIORITY);
     assert(priorityQueue.push(queryflow::Query(10, "low", 1)));
     assert(priorityQueue.push(queryflow::Query(11, "high", 9)));
+    assert(priorityQueue.push(queryflow::Query(12, "high tie", 9)));
+    const auto pendingOrder = priorityQueue.orderedQueries();
+    assert(pendingOrder.size() == 3);
+    assert(pendingOrder[0].id == 11);
+    assert(pendingOrder[1].id == 12);
+    assert(pendingOrder[2].id == 10);
     queryflow::Query selected;
     assert(priorityQueue.waitAndPop(selected));
     assert(selected.id == 11);
+    assert(priorityQueue.waitAndPop(selected));
+    assert(selected.id == 12);
     assert(priorityQueue.waitAndPop(selected));
     assert(selected.id == 10);
     priorityQueue.requestStop();

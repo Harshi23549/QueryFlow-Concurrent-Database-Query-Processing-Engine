@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include <memory>
 #include <optional>
 #include <string>
@@ -21,7 +22,7 @@ struct QueryResult {
     std::vector<std::string> columns;
     // A disengaged optional represents SQL NULL; an empty string remains distinct.
     std::vector<std::vector<std::optional<std::string>>> rows;
-    unsigned long long affectedRows = 0;
+    std::optional<unsigned long long> affectedRows;
 };
 
 class Transaction;
@@ -40,6 +41,14 @@ public:
     // Bind values separately to prevent SQL injection. Values are sent as strings or NULL.
     QueryResult executePrepared(const std::string& sql,
                                 const std::vector<std::optional<std::string>>& parameters);
+    QueryResult checkout(
+        std::uint64_t customerId,
+        const std::string& recipientName,
+        const std::string& addressLine,
+        const std::string& city,
+        const std::string& region,
+        const std::string& postalCode,
+        const std::string& country);
     bool ping();
     Transaction beginTransaction();
 

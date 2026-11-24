@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#171a18">
+  <title>QueryFlow | Engine Operations</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/admin" aria-label="QueryFlow operations">
+      <span class="brand-mark">QF</span><span class="brand-name">QueryFlow Operations</span>
+    </a>
+    <nav class="primary-nav"><a class="store-nav" href="{{STOREFRONT_URL}}">← Customer storefront</a></nav>
+    <div class="connection-status" id="connectionStatus">
+      <span class="connection-dot"></span><span id="connectionLabel">Connecting</span>
+    </div>
+  </header>
+  <main>
+    <div class="view-heading admin-heading">
+      <div><p class="eyebrow">Live engine telemetry</p><h1>Query processing monitor</h1></div>
+      <div class="engine-context">
+        <span class="tag" id="backendTag">Database loading</span>
+        <span class="tag tag-policy" id="adminPolicyTag">Policy loading</span>
+        <span class="engine-workers"><b id="workerCountValue">-</b> workers</span>
+      </div>
+    </div>
+    <p class="admin-explainer">Customer actions become parameterized database work. Watch each operation move through the manager, priority queue, scheduler, worker threads, and MySQL. This internal page is intended for local project operation.</p>
+
+    <section class="metrics-grid" aria-label="System metrics">
+      <article class="metric-cell"><span>Queries received</span><strong id="metricTotal">0</strong><small>this process</small></article>
+      <article class="metric-cell metric-queued"><span>Queued</span><strong id="metricQueued">0</strong><small>current</small></article>
+      <article class="metric-cell metric-running"><span>Running</span><strong id="metricRunning">0</strong><small>current</small></article>
+      <article class="metric-cell metric-completed"><span>Completed</span><strong id="metricCompleted">0</strong><small>this process</small></article>
+      <article class="metric-cell metric-failed"><span>Failed</span><strong id="metricFailed">0</strong><small>this process</small></article>
+      <article class="metric-cell"><span>Active threads</span><strong id="metricWorkers">0 / 0</strong><small>current</small></article>
+      <article class="metric-cell"><span>Throughput</span><strong id="metricThroughput">0.00</strong><small>completed / second</small></article>
+      <article class="metric-cell"><span>Average wait</span><strong id="metricWait">-</strong><small>completed operations</small></article>
+      <article class="metric-cell"><span>Average execution</span><strong id="metricExecution">-</strong><small>completed operations</small></article>
+      <article class="metric-cell"><span>Average response</span><strong id="metricResponse">-</strong><small>completed operations</small></article>
+    </section>
+
+    <section class="pipeline-section">
+      <div class="section-heading compact-heading">
+        <div><p class="eyebrow">Live processing path</p><h2>Application pipeline</h2></div>
+        <span class="muted small-copy" id="pipelineCaption">Waiting for storefront activity</span>
+      </div>
+      <div class="pipeline">
+        <div class="pipeline-stage"><span class="stage-index">01</span><b>Customer action</b><strong id="stageSubmitted">0</strong><small>interpreted</small></div>
+        <span class="pipeline-arrow">→</span>
+        <div class="pipeline-stage"><span class="stage-index">02</span><b>Query manager</b><strong id="stageAssigned">0</strong><small>tracked</small></div>
+        <span class="pipeline-arrow">→</span>
+        <div class="pipeline-stage"><span class="stage-index">03</span><b>Shared queue</b><strong id="stageQueue">0</strong><small>waiting</small></div>
+        <span class="pipeline-arrow">→</span>
+        <div class="pipeline-stage"><span class="stage-index">04</span><b>Scheduler</b><strong id="stageScheduled">0</strong><small>dispatched</small></div>
+        <span class="pipeline-arrow">→</span>
+        <div class="pipeline-stage"><span class="stage-index">05</span><b>Worker threads</b><strong id="stageWorkers">0</strong><small>active</small></div>
+        <span class="pipeline-arrow">→</span>
+        <div class="pipeline-stage"><span class="stage-index">06</span><b>Database result</b><strong id="stageTerminal">0</strong><small>finished</small></div>
+      </div>
+    </section>
+
+    <div class="admin-columns">
+      <section class="data-section queue-section">
+        <div class="section-heading compact-heading">
+          <div><p class="eyebrow">Scheduler dispatch order</p><h2>Shared queue <span id="queueCount" class="count-badge">0</span></h2></div>
+          <span id="queuePolicyHint" class="muted small-copy">Priority order</span>
+        </div>
+        <div class="table-scroll">
+          <table><thead><tr><th>Pos</th><th>ID</th><th>Customer</th><th>Operation</th><th>Priority</th><th>Wait</th></tr></thead>
+            <tbody id="queueBody"><tr><td colspan="6" class="table-empty">Queue is empty</td></tr></tbody></table>
+        </div>
+      </section>
+      <section class="data-section worker-section">
+        <div class="section-heading compact-heading"><div><p class="eyebrow">Concurrent execution</p><h2>Worker threads</h2></div></div>
+        <div id="workerList" class="worker-list"><div class="empty-state">Waiting for activity.</div></div>
+      </section>
+    </div>
+
+    <div class="admin-columns lower-columns">
+      <section class="data-section event-section">
+        <div class="section-heading compact-heading"><div><p class="eyebrow">QueryFlow lifecycle callbacks</p><h2>Processing event log</h2></div></div>
+        <div id="eventList" class="event-list"><div class="empty-state">No events recorded.</div></div>
+      </section>
+      <section class="data-section event-section">
+        <div class="section-heading compact-heading"><div><p class="eyebrow">Accepted store operations</p><h2>Latest queries</h2></div></div>
+        <div id="queryList" class="query-feed"><div class="empty-state">No operations yet.</div></div>
+      </section>
+    </div>
+    <p class="data-note">This operations page is a local project monitor, not an authenticated public admin portal. Query parameters and passwords are never displayed; user-supplied values use prepared statements.</p>
+  </main>
+  <script src="/admin.js" defer></script>
+</body>
+</html>

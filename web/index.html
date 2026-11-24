@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#171a18">
+  <title>QueryFlow Market</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <header class="topbar shop-topbar">
+    <a class="brand" href="/" aria-label="QueryFlow Market home">
+      <span class="brand-mark">Q</span><span class="brand-name">QueryFlow Market</span>
+    </a>
+    <nav class="primary-nav" aria-label="Store">
+      <a class="store-nav" href="#catalog">Shop</a>
+      <a class="store-nav" href="#cart">Cart <span class="count-badge" id="cartCount">0</span></a>
+      <a class="store-nav" href="#orders">My orders</a>
+    </nav>
+    <div class="connection-status" id="connectionStatus">
+      <span class="connection-dot"></span><span id="connectionLabel">Connecting</span>
+    </div>
+  </header>
+
+  <main class="shop-main">
+    <section class="shop-hero">
+      <div>
+        <p class="eyebrow">Thoughtful tech for your workspace</p>
+        <h1>Find your next<br>everyday essential.</h1>
+        <p class="hero-copy">Browse the collection, build your basket, and place an order in a few simple steps.</p>
+        <a class="button button-primary hero-link" href="#catalog">Explore products <span aria-hidden="true">↓</span></a>
+      </div>
+      <div class="hero-art" aria-hidden="true">
+        <div class="hero-orbit orbit-one"></div><div class="hero-orbit orbit-two"></div>
+        <div class="hero-product"><span>QF</span><b>WORK<br>BETTER</b><i>01 / 06</i></div>
+      </div>
+    </section>
+
+    <section class="account-strip" aria-label="Customer account">
+      <div id="signedOut" class="auth-layout">
+        <div><p class="eyebrow">Your account</p><h2>Sign in or create an account</h2><p class="muted small-copy">Your basket and order history are saved to your account.</p></div>
+        <div class="auth-card">
+          <div class="auth-tabs">
+            <button type="button" class="auth-tab active" data-auth-mode="login">Sign in</button>
+            <button type="button" class="auth-tab" data-auth-mode="register">Create account</button>
+          </div>
+          <form id="loginForm" class="auth-form">
+            <label>Email<input name="email" type="email" maxlength="254" autocomplete="email" required></label>
+            <label>Password<input name="password" type="password" maxlength="256" autocomplete="current-password" required></label>
+            <button class="button button-primary" type="submit">Sign in</button>
+          </form>
+          <form id="registerForm" class="auth-form" hidden>
+            <label>Full name<input name="fullName" maxlength="120" autocomplete="name" required></label>
+            <label>Email<input name="email" type="email" maxlength="254" autocomplete="email" required></label>
+            <label>Password <span class="field-note">10 characters minimum</span><input name="password" type="password" minlength="10" maxlength="256" autocomplete="new-password" required></label>
+            <button class="button button-primary" type="submit">Create account</button>
+          </form>
+          <p id="authFeedback" class="form-feedback" aria-live="polite"></p>
+        </div>
+      </div>
+      <div id="signedIn" class="signed-in" hidden>
+        <div><p class="eyebrow">Welcome back</p><h2 id="customerName"></h2><span id="customerEmail" class="muted"></span></div>
+        <button id="logoutButton" class="button button-quiet" type="button">Sign out</button>
+      </div>
+    </section>
+
+    <section id="catalog" class="store-section">
+      <div class="section-heading store-heading">
+        <div><p class="eyebrow">The collection</p><h2>Shop products</h2></div>
+        <label class="catalog-filter">Category
+          <select id="categoryFilter"><option value="all">All products</option></select>
+        </label>
+      </div>
+      <div id="productGrid" class="product-grid"><div class="empty-state">Loading products…</div></div>
+    </section>
+
+    <section id="cart" class="store-section cart-section">
+      <div class="section-heading store-heading">
+        <div><p class="eyebrow">Your basket</p><h2>Shopping cart</h2></div>
+        <span class="tag" id="cartStatus">Sign in to save your cart</span>
+      </div>
+      <div class="cart-layout">
+        <div id="cartItems" class="cart-items"><div class="empty-state">Your basket is empty.</div></div>
+        <form id="checkoutForm" class="checkout-card">
+          <h3>Delivery details</h3>
+          <label>Recipient name<input name="recipientName" maxlength="120" autocomplete="name" required></label>
+          <label>Street address<input name="addressLine" maxlength="240" autocomplete="street-address" required></label>
+          <div class="address-row">
+            <label>City<input name="city" maxlength="100" autocomplete="address-level2" required></label>
+            <label>State / region<input name="region" maxlength="100" autocomplete="address-level1" required></label>
+          </div>
+          <div class="address-row">
+            <label>Postal code<input name="postalCode" maxlength="24" autocomplete="postal-code" required></label>
+            <label>Country<input name="country" maxlength="80" value="India" autocomplete="country-name" required></label>
+          </div>
+          <div class="cart-total"><span>Order total</span><strong id="cartTotal">₹0.00</strong></div>
+          <button id="checkoutButton" class="button button-primary checkout-button" type="submit">Place order</button>
+          <p class="muted small-copy">Checkout is a project simulation. No real payment is collected.</p>
+        </form>
+      </div>
+      <article id="confirmation" class="confirmation-card" hidden aria-live="polite"></article>
+    </section>
+
+    <section id="orders" class="store-section">
+      <div class="section-heading store-heading">
+        <div><p class="eyebrow">Saved to your account</p><h2>Order history</h2></div>
+        <button id="refreshOrdersButton" class="button button-quiet" type="button">Refresh orders</button>
+      </div>
+      <div id="orderHistory" class="order-history"><div class="empty-state">Sign in to see your orders.</div></div>
+    </section>
+    <footer class="store-footer">QueryFlow Market · Orders are processed by the QueryFlow scheduling engine · Payments are simulated</footer>
+  </main>
+  <script src="/app.js" defer></script>
+</body>
+</html>
