@@ -1,5 +1,3 @@
-USE queryflow;
-
 -- Baseline indexes are declared in schema.sql for primary/foreign-key and common
 -- lifecycle lookups. Record the baseline EXPLAIN ANALYZE output first.
 -- Apply this optional index once, then rerun section J of test_queries.sql.
