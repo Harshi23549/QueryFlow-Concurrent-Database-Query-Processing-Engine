@@ -1,5 +1,3 @@
-USE queryflow;
-
 -- Optional one-time workload expansion for performance measurements.
 -- Adds 500 customers, 500 products, 5,000 orders, and 10,000 order lines.
 -- Run after seed.sql. Each run creates an additional batch.
