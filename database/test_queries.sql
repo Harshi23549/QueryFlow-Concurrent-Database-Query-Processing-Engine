@@ -1,5 +1,3 @@
-USE queryflow;
-
 -- A. Point read and basic sort
 SELECT product_id, product_name, category, unit_price
 FROM products
